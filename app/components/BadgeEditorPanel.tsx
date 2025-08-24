@@ -5,6 +5,7 @@ import { BadgeLineEditor } from './BadgeLineEditor';
 import { BadgePreview } from './BadgePreview';
 import { autoScaleFontSize } from '../utils/textMeasurement';
 import { FONT_COLORS } from '../constants/colors';
+import { FONT_FAMILIES } from '../constants/fonts';
 
 export interface BadgeEditorPanelProps {
   badge: Badge;
@@ -86,11 +87,11 @@ export const BadgeEditorPanel: React.FC<BadgeEditorPanelProps> = ({
                     onChange={e => onLineChange(idx, { fontFamily: e.target.value })}
                     disabled={!editable}
                   >
-                    <option value="Arial">Arial</option>
-                    <option value="Helvetica">Helvetica</option>
-                    <option value="Roboto">Roboto</option>
-                    <option value="Open Sans">Open Sans</option>
-                    <option value="Verdana">Verdana</option>
+                    {FONT_FAMILIES.map((font) => (
+                      <option key={font.value} value={font.value}>
+                        {font.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 {/* Format */}

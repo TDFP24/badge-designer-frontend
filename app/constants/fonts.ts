@@ -1,62 +1,70 @@
 export const FONT_FAMILIES = [
   {
-    value: 'Arial',
-    label: 'Arial',
+    value: 'Roboto',
+    label: 'Roboto',
     category: 'Sans-serif',
     isDefault: true
   },
   {
-    value: 'Helvetica',
-    label: 'Helvetica',
+    value: 'Open Sans',
+    label: 'Open Sans',
     category: 'Sans-serif'
   },
   {
-    value: 'Times New Roman',
-    label: 'Times New Roman',
+    value: 'Lato',
+    label: 'Lato',
+    category: 'Sans-serif'
+  },
+  {
+    value: 'Montserrat',
+    label: 'Montserrat',
+    category: 'Sans-serif'
+  },
+  {
+    value: 'Oswald',
+    label: 'Oswald',
+    category: 'Sans-serif'
+  },
+  {
+    value: 'Source Sans 3',
+    label: 'Source Sans 3',
+    category: 'Sans-serif'
+  },
+  {
+    value: 'Raleway',
+    label: 'Raleway',
+    category: 'Sans-serif'
+  },
+  {
+    value: 'PT Sans',
+    label: 'PT Sans',
+    category: 'Sans-serif'
+  },
+  {
+    value: 'Merriweather',
+    label: 'Merriweather',
+    category: 'Serif'
+  },
+  {
+    value: 'Noto Sans',
+    label: 'Noto Sans',
+    category: 'Sans-serif'
+  },
+  {
+    value: 'Noto Serif',
+    label: 'Noto Serif',
     category: 'Serif'
   },
   {
     value: 'Georgia',
     label: 'Georgia',
     category: 'Serif'
-  },
-  {
-    value: 'Courier New',
-    label: 'Courier New',
-    category: 'Monospace'
-  },
-  {
-    value: 'Verdana',
-    label: 'Verdana',
-    category: 'Sans-serif'
-  },
-  {
-    value: 'Tahoma',
-    label: 'Tahoma',
-    category: 'Sans-serif'
-  },
-  {
-    value: 'Trebuchet MS',
-    label: 'Trebuchet MS',
-    category: 'Sans-serif'
-  },
-  {
-    value: 'Impact',
-    label: 'Impact',
-    category: 'Sans-serif'
-  },
-  {
-    value: 'Comic Sans MS',
-    label: 'Comic Sans MS',
-    category: 'Casual'
   }
 ] as const;
 
 export const FONT_CATEGORIES = [
   'Sans-serif',
-  'Serif',
-  'Monospace',
-  'Casual'
+  'Serif'
 ] as const;
 
 export type FontFamily = typeof FONT_FAMILIES[number]['value'];
@@ -70,4 +78,4 @@ type FontOption = {
   isDefault?: boolean;
 };
 
-export const DEFAULT_FONT = (FONT_FAMILIES as readonly FontOption[]).find(font => font.isDefault)?.value || 'Arial'; 
+export const DEFAULT_FONT = (FONT_FAMILIES as readonly FontOption[]).find(font => font.isDefault)?.value || 'Roboto'; 

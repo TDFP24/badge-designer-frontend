@@ -14,11 +14,11 @@ import {
   XMarkIcon,
   PencilIcon
 } from '@heroicons/react/24/outline';
-import { handleDownloadPDF } from '../utils/pdfGenerator';
+import { generatePDFNew as generatePDF } from '../utils/pdfGenerator';
 import { BadgeTextLinesHeader } from './BadgeTextLinesHeader';
 import { BadgeEditPanel } from './BadgeEditPanel';
 import { BadgeLine, Badge } from '../types/badge';
-import { BACKGROUND_COLORS, FONT_COLORS } from '../constants/colors';
+import { BACKGROUND_COLORS, FONT_COLORS, EXTENDED_BACKGROUND_COLORS } from '../constants/colors';
 import { BADGE_CONSTANTS } from '../constants/badge';
 import { generateFullBadgeImage, generateThumbnailFromFullImage } from '../utils/badgeThumbnail';
 import { getCurrentShop, saveBadgeDesign, ShopAuthData } from '../utils/shopAuth';
@@ -47,7 +47,6 @@ interface BadgeEditorPanelProps {
 
 const backgroundColors = BACKGROUND_COLORS;
 const fontColors = FONT_COLORS;
-const fontOptions = ['Arial', 'Times New Roman', 'Courier New', 'Verdana', 'Georgia'];
 const maxLines = BADGE_CONSTANTS.MAX_LINES;
 const badgeWidth = BADGE_CONSTANTS.BADGE_WIDTH;
 const badgeHeight = BADGE_CONSTANTS.BADGE_HEIGHT;
@@ -61,8 +60,8 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
   const LINE_HEIGHT_MULTIPLIER = 1.3;
   const [badge, setBadge] = useState({
     lines: [
-      { text: 'Your Name', size: 18, color: '#000000', bold: false, italic: false, underline: false, fontFamily: 'Arial', alignment: 'center' } as BadgeLine,
-      { text: 'Title', size: 13, color: '#000000', bold: false, italic: false, underline: false, fontFamily: 'Arial', alignment: 'center' } as BadgeLine,
+      { text: 'Your Name', size: 18, color: '#000000', bold: false, italic: false, underline: false, fontFamily: 'Roboto', alignment: 'center' } as BadgeLine,
+      { text: 'Title', size: 13, color: '#000000', bold: false, italic: false, underline: false, fontFamily: 'Roboto', alignment: 'center' } as BadgeLine,
     ],
     backgroundColor: '#FFFFFF',
     backing: 'pin',
@@ -74,6 +73,7 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
   const [multipleBadges, setMultipleBadges] = useState<any[]>([]);
   const [editModalIndex, setEditModalIndex] = useState<number | null>(null);
   const [isAddingToCart, setIsAddingToCart] = useState(false);
+  const [showExtendedBgPicker, setShowExtendedBgPicker] = useState(false);
 
   // Helper to estimate text width for a given font size and string
   const measureTextWidth = (text: string, fontSize: number, fontFamily: string, bold: boolean, italic: boolean) => {
@@ -96,6 +96,53 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
     }
     // Fallback minimum value (e.g., 8)
     return Math.max(testStr.length - 1, 8);
+  };
+
+  // Helper function to get proper font family with fallbacks
+  const getFontFamily = (fontFamily: string) => {
+    let result;
+    switch (fontFamily) {
+      case 'Roboto':
+        result = 'Roboto, Arial, sans-serif';
+        break;
+      case 'Open Sans':
+        result = '"Open Sans", Arial, sans-serif';
+        break;
+      case 'Lato':
+        result = 'Lato, Arial, sans-serif';
+        break;
+      case 'Montserrat':
+        result = 'Montserrat, Arial, sans-serif';
+        break;
+      case 'Oswald':
+        result = 'Oswald, Arial, sans-serif';
+        break;
+      case 'Source Sans 3':
+        result = '"Source Sans 3", Arial, sans-serif';
+        break;
+      case 'Raleway':
+        result = 'Raleway, Arial, sans-serif';
+        break;
+      case 'PT Sans':
+        result = '"PT Sans", Arial, sans-serif';
+        break;
+      case 'Merriweather':
+        result = 'Merriweather, Georgia, serif';
+        break;
+      case 'Noto Sans':
+        result = '"Noto Sans", Arial, sans-serif';
+        break;
+      case 'Noto Serif':
+        result = '"Noto Serif", Georgia, serif';
+        break;
+      case 'Georgia':
+        result = 'Georgia, serif';
+        break;
+      default:
+        result = 'Roboto, Arial, sans-serif';
+    }
+    console.log(`Font family for ${fontFamily}: ${result}`);
+    return result;
   };
 
   // Handlers for badge state
@@ -489,6 +536,7 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
                         <option value="Roboto">Roboto</option>
                         <option value="Open Sans">Open Sans</option>
                         <option value="Verdana">Verdana</option>
+                        <option value="Courier New">Courier New</option>
                       </select>
                     </div>
                     {/* Format */}
@@ -609,7 +657,15 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
               <span className="text-xl font-bold text-red-600">1x3 Badge</span>
             </div>
             <button
-              onClick={handleDownloadPDF}
+              onClick={() => {
+                console.log('PDF button clicked!');
+                console.log('Badge data:', badge);
+                console.log('Badge data JSON:', JSON.stringify(badge, null, 2));
+                console.log('Line 1 text:', `"${badge.lines[0].text}"`);
+                console.log('Line 1 text length:', badge.lines[0].text?.length);
+                console.log('Multiple badges:', multipleBadges);
+                generatePDF(badge, multipleBadges);
+              }}
               className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
             >
               Download PDF
@@ -617,11 +673,11 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
           </div>
           
           {/* Move background color label, swatches, and preview to the left, lined up with 'Text Lines'. Make font size for 'Background Color' and 'Text Lines' the same. */}
-          <div className="flex flex-row gap-6 items-start w-full mb-6">
+          <div className="flex flex-row gap-6 items-center w-full mb-6">
             {/* Background Color Picker */}
             <div className="flex flex-col items-start justify-center min-w-[120px] pr-2" style={{ alignSelf: 'flex-start' }}>
               <span className="font-semibold text-gray-700 mb-2">Background Color</span>
-              <div className="grid grid-cols-4 grid-rows-2 gap-2">
+              <div className="grid grid-cols-4 gap-2">
                 {backgroundColors.map((bg: any) => (
                   <button
                     key={bg.value}
@@ -632,6 +688,10 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
                   />
                 ))}
               </div>
+              <button
+                className="mt-3 text-xs px-2 py-1 border rounded bg-white hover:bg-gray-50"
+                onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.preventDefault(); setShowExtendedBgPicker(true); }}
+              >More colors…</button>
             </div>
             {/* Preview Box */}
             <div className="flex items-center justify-center rounded border w-full max-w-[300px] badge-preview" style={{
@@ -659,7 +719,7 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
                         fontWeight: line.bold ? 'bold' : 'normal',
                         fontStyle: line.italic ? 'italic' : 'normal',
                         textDecoration: line.underline ? 'underline' : 'none',
-                        fontFamily: line.fontFamily,
+                        fontFamily: getFontFamily(line.fontFamily),
                         whiteSpace: 'nowrap',
                         margin: line.alignment === 'left' ? '0 auto 0 0' : line.alignment === 'right' ? '0 0 0 auto' : '0 auto',
                         lineHeight: 1.3,
@@ -792,7 +852,7 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
                                     fontWeight: line.bold ? 'bold' : 'normal',
                                     fontStyle: line.italic ? 'italic' : 'normal',
                                     textDecoration: line.underline ? 'underline' : 'none',
-                                    fontFamily: line.fontFamily,
+                                    fontFamily: getFontFamily(line.fontFamily),
                                     whiteSpace: 'nowrap',
                                     margin: line.alignment === 'left' ? '0 auto 0 0' : line.alignment === 'right' ? '0 0 0 auto' : '0 auto',
                                     lineHeight: 1,
@@ -825,7 +885,7 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
                                   fontWeight: line.bold ? 'bold' : 'normal',
                                   fontStyle: line.italic ? 'italic' : 'normal',
                                   textDecoration: line.underline ? 'underline' : 'none',
-                                  fontFamily: line.fontFamily,
+                                  fontFamily: getFontFamily(line.fontFamily),
                                   whiteSpace: 'nowrap',
                                   margin: line.alignment === 'left' ? '0 auto 0 0' : line.alignment === 'right' ? '0 0 0 auto' : '0 auto',
                                   lineHeight: 1.3,
@@ -886,7 +946,7 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
                                         fontWeight: line.bold ? 'bold' : 'normal',
                                         fontStyle: line.italic ? 'italic' : 'normal',
                                         textDecoration: line.underline ? 'underline' : 'none',
-                                        fontFamily: line.fontFamily,
+                                        fontFamily: getFontFamily(line.fontFamily),
                                         whiteSpace: 'nowrap',
                                         margin: line.alignment === 'left' ? '0 auto 0 0' : line.alignment === 'right' ? '0 0 0 auto' : '0 auto',
                                         lineHeight: 1,
@@ -919,7 +979,7 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
                                       fontWeight: line.bold ? 'bold' : 'normal',
                                       fontStyle: line.italic ? 'italic' : 'normal',
                                       textDecoration: line.underline ? 'underline' : 'none',
-                                      fontFamily: line.fontFamily,
+                                      fontFamily: getFontFamily(line.fontFamily),
                                       whiteSpace: 'nowrap',
                                       margin: line.alignment === 'left' ? '0 auto 0 0' : line.alignment === 'right' ? '0 0 0 auto' : '0 auto',
                                       lineHeight: 1.3,
@@ -993,7 +1053,7 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
                                                 fontWeight: line.bold ? 'bold' : 'normal',
                                                 fontStyle: line.italic ? 'italic' : 'normal',
                                                 textDecoration: line.underline ? 'underline' : 'none',
-                                                fontFamily: line.fontFamily,
+                                                fontFamily: getFontFamily(line.fontFamily),
                                                 whiteSpace: 'nowrap',
                                                 margin: line.alignment === 'left' ? '0 auto 0 0' : line.alignment === 'right' ? '0 0 0 auto' : '0 auto',
                                                 lineHeight: 1.3,
@@ -1141,6 +1201,31 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
                 className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded"
                 onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.preventDefault(); parseCsv(csvText); setTimeout(() => { if (!csvError) setShowCsvModal(false); }, 0); }}
               >Add Badges</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showExtendedBgPicker && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
+          <div className="bg-white rounded-lg shadow-lg p-4 w-full max-w-2xl relative max-h-[90vh] overflow-y-auto">
+            <button
+              className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-xl"
+              onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.preventDefault(); setShowExtendedBgPicker(false); }}
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <h3 className="text-lg font-bold mb-3">Choose Background Color</h3>
+            <div className="grid grid-cols-9 gap-2">
+              {EXTENDED_BACKGROUND_COLORS.map((c) => (
+                <button
+                  key={c.value}
+                  className={`w-7 h-7 border rounded ${badge.backgroundColor === c.value ? 'ring-2 ring-offset-1 ' + c.ring : ''}`}
+                  style={{ backgroundColor: c.value }}
+                  title={c.name}
+                  onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.preventDefault(); setBadge({ ...badge, backgroundColor: c.value }); setShowExtendedBgPicker(false); }}
+                />
+              ))}
             </div>
           </div>
         </div>

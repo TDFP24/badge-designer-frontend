@@ -1,527 +1,439 @@
-// Placeholder for pdf-lib PDF generation implementation
-// All other PDF generator code has been removed.
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { Badge } from '../types/badge';
+import { getColorInfo } from '../constants/colors';
 
-// TODO: Implement badge PDF generation using pdf-lib
+/* ---------- Color utils ---------- */
 
-import { PDFDocument, rgb, StandardFonts, PDFPage, PDFFont } from 'pdf-lib';
-
-interface BadgeLine {
-  text: string;
-  size: number;
-  color?: string;
-  bold?: boolean;
-  italic?: boolean;
-  underline?: boolean;
-  alignment?: string;
-}
-
-interface BadgeOptions {
-  page: PDFPage;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  lines: BadgeLine[];
-  font: PDFFont;
-  color?: [number, number, number];
-  lineSpacing?: number;
-}
-
-export function drawCenteredBadge({
-  page,
-  x,
-  y,
-  width,
-  height,
-  lines,
-  font,
-  color = [0, 0, 0],
-  lineSpacing = 1.2,
-}: BadgeOptions) {
-  // Step 1: Calculate total height of all lines with spacing
-  let totalBlockHeight = 0;
-  for (let i = 0; i < lines.length; i++) {
-    const fontSize = lines[i].size;
-    totalBlockHeight += fontSize * (i === lines.length - 1 ? 1 : lineSpacing);
-  }
-  // Step 2: Calculate initial Y (bottom-left origin)
-  let cursorY = y + (height + totalBlockHeight) / 2;
-  // Step 3: Draw each line, center-aligned, using per-line color
-  for (const line of lines) {
-    const { text, size } = line;
-    cursorY -= size; // baseline shift
-    const textWidth = font.widthOfTextAtSize(text, size);
-    const textX = x + (width - textWidth) / 2;
-    // Use per-line color if present, else fallback to default
-    let lineColor: [number, number, number];
-    if (line.color) {
-      if (Array.isArray(line.color) && line.color.length === 3) {
-        lineColor = [Number(line.color[0]), Number(line.color[1]), Number(line.color[2])];
-      } else {
-        lineColor = cssColorToRgb(line.color);
-      }
-    } else {
-      lineColor = color as [number, number, number];
-    }
-    page.drawText(text, {
-      x: textX,
-      y: cursorY,
-      size,
-      font,
-      color: rgb(lineColor[0], lineColor[1], lineColor[2]),
-    });
-    // Apply extra spacing only between lines
-    cursorY -= size * (lineSpacing - 1);
-  }
-}
-
-// Helper to convert CSS color to rgb() and hex
+// rgb()/hex → [0..1] rgb
 function cssColorToRgb(color: string): [number, number, number] {
-  if (color.startsWith('rgb')) {
-    const rgbArr = color.match(/\d+/g)?.map(Number) || [0, 0, 0];
+  if (!color) return [0, 0, 0];
+  
+  // Normalize the color string
+  const normalizedColor = color.trim().toLowerCase();
+
+  if (normalizedColor.startsWith('rgb')) {
+    const rgbArr = normalizedColor.match(/\d+/g)?.map(Number) || [0, 0, 0];
     return [rgbArr[0] / 255, rgbArr[1] / 255, rgbArr[2] / 255];
-  } else if (color.startsWith('#')) {
-    let hex = color.replace('#', '');
+  }
+  if (normalizedColor.startsWith('#')) {
+    let hex = normalizedColor.slice(1);
     if (hex.length === 3) hex = hex.split('').map(x => x + x).join('');
     const num = parseInt(hex, 16);
     return [((num >> 16) & 255) / 255, ((num >> 8) & 255) / 255, (num & 255) / 255];
   }
-  return [0, 0, 0];
+  // Fallback: try getColorInfo (if caller passed a named color we support)
+  const info = getColorInfo(normalizedColor) || getColorInfo('#000000');
+  const hex = info?.hex?.toUpperCase?.() || '#000000';
+  return cssColorToRgb(hex);
 }
 
+// Normalise to #RRGGBB (uppercase)
 function cssColorToHex(color: string): string {
-  if (color.startsWith('rgb')) {
-    const rgbArr = color.match(/\d+/g)?.map(Number) || [0, 0, 0];
+  if (!color) return '#000000';
+  
+  // Normalize the color string
+  const normalizedColor = color.trim().toLowerCase();
+  
+  if (normalizedColor.startsWith('rgb')) {
+    const [r, g, b] = normalizedColor.match(/\d+/g)?.map(Number) || [0, 0, 0];
     return (
       '#' +
-      rgbArr
-        .map((v) => {
-          const hex = Number(v).toString(16);
-          return hex.length === 1 ? '0' + hex : hex;
-        })
-        .join('')
-    );
+      r.toString(16).padStart(2, '0') +
+      g.toString(16).padStart(2, '0') +
+      b.toString(16).padStart(2, '0')
+    ).toUpperCase();
   }
-  return color;
+  if (normalizedColor.startsWith('#')) {
+    let hex = normalizedColor.slice(1);
+    if (hex.length === 3) hex = hex.split('').map(x => x + x).join('');
+    return ('#' + hex).toUpperCase();
+  }
+  // Try lookup
+  const info = getColorInfo(normalizedColor);
+  if (info?.hex) return info.hex.toUpperCase();
+  return '#000000';
 }
 
-// Draw specs box to the right of the badge
-function drawBadgeSpecs({
-  page,
-  badge,
-  badgeX,
-  badgeY,
-  badgeWidth,
-  badgeHeight,
-  font,
-  fontBold,
-  lineSpacing = 1.2,
-}: {
-  page: PDFPage;
-  badge: any;
-  badgeX: number;
-  badgeY: number;
-  badgeWidth: number;
-  badgeHeight: number;
-  font: PDFFont;
-  fontBold: PDFFont;
-  lineSpacing?: number;
-}) {
-  const specX = badgeX + badgeWidth + 20;
-  let specY = badgeY + badgeHeight;
-  const fontSize = 11;
-  // Background Color
-  page.drawText('Background Color:', { x: specX, y: specY, size: fontSize, font: fontBold, color: rgb(0,0,0) });
-  // Swatch
-  page.drawRectangle({ x: specX + 110, y: specY - 2, width: 16, height: 12, color: rgb(...cssColorToRgb(badge.backgroundColor)) });
-  // Hex
-  page.drawText(cssColorToHex(badge.backgroundColor), { x: specX + 130, y: specY, size: fontSize, font, color: rgb(0,0,0) });
-  specY -= fontSize * 1.6;
-  // Per line
-  badge.lines.forEach((line: any, idx: number) => {
-    page.drawText(`Line ${idx+1}:`, { x: specX, y: specY, size: fontSize, font: fontBold, color: rgb(0,0,0) });
-    specY -= fontSize * 1.2;
-    // Text
-    page.drawText(`Text: ${line.text}`, { x: specX + 10, y: specY, size: fontSize, font, color: rgb(0,0,0) });
-    specY -= fontSize * 1.1;
-    // Text color swatch and hex
-    page.drawText('Text Color:', { x: specX + 10, y: specY, size: fontSize, font, color: rgb(0,0,0) });
-    page.drawRectangle({ x: specX + 70, y: specY - 2, width: 16, height: 12, color: rgb(...cssColorToRgb(line.color)) });
-    page.drawText(cssColorToHex(line.color), { x: specX + 90, y: specY, size: fontSize, font, color: rgb(0,0,0) });
-    specY -= fontSize * 1.1;
-    // Font
-    page.drawText(`Font: Helvetica`, { x: specX + 10, y: specY, size: fontSize, font, color: rgb(0,0,0) });
-    specY -= fontSize * 1.1;
-    // Format
-    let format = [];
-    if (line.bold) format.push('Bold');
-    if (line.italic) format.push('Italic');
-    if (line.underline) format.push('Underline');
-    page.drawText(`Format: ${format.length ? format.join(', ') : 'Normal'}`, { x: specX + 10, y: specY, size: fontSize, font, color: rgb(0,0,0) });
-    specY -= fontSize * 1.1;
-    // Align
-    page.drawText(`Align: ${line.alignment ? line.alignment.charAt(0).toUpperCase() + line.alignment.slice(1) : 'Center'}`, { x: specX + 10, y: specY, size: fontSize, font, color: rgb(0,0,0) });
-    specY -= fontSize * 1.1;
-    // Font size
-    page.drawText(`Font Size: ${Math.round(line.size / 0.75)} px`, { x: specX + 10, y: specY, size: fontSize, font, color: rgb(0,0,0) });
-    specY -= fontSize * 1.3;
-  });
-}
+/* ---------- Units ---------- */
 
-// Extract badge data from DOM
-function extractBadgeData(element: HTMLElement) {
-  const lines: BadgeLine[] = [];
-  const spans = element.querySelectorAll('span');
-  spans.forEach(span => {
-    const style = window.getComputedStyle(span);
-    lines.push({
-      text: span.textContent || '',
-      size: parseInt(style.fontSize),
-      color: style.color,
-      bold: style.fontWeight === 'bold' || parseInt(style.fontWeight) >= 700,
-      italic: style.fontStyle === 'italic',
-      underline: style.textDecoration === 'underline',
-      alignment: style.textAlign,
-    });
-  });
-  return {
-    lines,
-    backgroundColor: element.style.backgroundColor || '#FFFFFF'
-  };
-}
+// Convert px to pt
+const pxToPt = (px: number) => px * 0.75;
+const pxToPtRounded = (px: number) => Math.round(pxToPt(px));
 
-// Column headers for specs table
-const TABLE_HEADERS = [
-  '', // Badge image/Background
-  'Text & Font Size',
-  'Text Color',
-  'Format & Align',
-];
+/* ---------- Font embedding ---------- */
 
-// Helper to get color name from value
-const COLOR_NAMES: Record<string, string> = {
-  '#000000': 'Black',
-  '#FFFFFF': 'White',
-  '#ea0c0c': 'Red',
-  '#0c5cea': 'Blue',
-  '#C0C0C0': 'Silver',
-  '#eac10c': 'Gold',
-  '#6E260E': 'Brown',
-  '#F0E68C': 'Ivory',
-  '#FFFF00': 'Yellow',
+// Map font names to Google Fonts URLs (matching the ones in root.tsx)
+const GOOGLE_FONT_URLS: { [key: string]: string } = {
+  'Roboto': 'https://fonts.gstatic.com/s/roboto/v30/KFOmCnqEu92Fr1Mu4mxK.ttf',
+  'Oswald': 'https://fonts.gstatic.com/s/oswald/v49/TK3_WkUHHAIjg75cFRf3bXL8LICs1_FvsUZiYA.ttf',
+  'Open Sans': 'https://fonts.gstatic.com/s/opensans/v40/memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsjZ0B4gaVI.woff2',
+  'Lato': 'https://fonts.gstatic.com/s/lato/v24/S6uyw4BMUTPHjx4wWw.ttf',
+  'Montserrat': 'https://fonts.gstatic.com/s/montserrat/v25/JTUSjIg1_i6t8kCHKm459Wlhyw.ttf',
+  'Source Sans 3': 'https://fonts.gstatic.com/s/sourcesans3/v14/6xK3dSBYKcSV-LCoeQqfX1RYOo3qOK7lujVj9w.woff2',
+  'Raleway': 'https://fonts.gstatic.com/s/raleway/v28/1Ptug8zJR_SdK3vCMx5.ttf',
+  'PT Sans': 'https://fonts.gstatic.com/s/ptsans/v17/jizaRExUiTo99u79D0KEwA.ttf',
+  'Merriweather': 'https://fonts.gstatic.com/s/merriweather/v30/u-440qyriQwlOrhSvowK_l5-fCZM.ttf',
+  'Noto Sans': 'https://fonts.gstatic.com/s/notosans/v30/o-0IIpQlx3QUlC5A4PNb4g.ttf',
+  'Noto Serif': 'https://fonts.gstatic.com/s/notoserif/v22/ga6Iaw1J5X9T9RW6j9bNTFA.ttf',
+  'Georgia': 'https://fonts.gstatic.com/s/georgia/v18/georgia.ttf'
 };
 
-// Utility: px to pt with standard rounding
-function pxToPtRounded(px: number): number {
-  return Math.round(px * 0.75);
-}
+// Cache for embedded fonts
+const fontCache = new Map<string, any>();
 
-// Update getColorName to always return a name (no hex)
-function getColorName(color: string): string {
-  const hex = cssColorToHex(color).toUpperCase();
-  return COLOR_NAMES[hex] || 'Custom';
-}
-
-// Draw badge table row
-function drawBadgeTableRow({
-  page,
-  rowY,
-  colXs,
-  rowHeight,
-  badgeImage,
-  backgroundColor,
-  line,
-  isFirstRow,
-  font,
-  fontBold,
-  badgeLinesCount,
-  badge,
-  badgeBox,
-  headerY,
-  headerHeight,
-  bufferHeight,
-  textColWidth,
-  colorColWidth,
-  formatColWidth,
-}: any) {
-  const fontSize = 10;
-  const lineGray = rgb(0.8, 0.8, 0.8);
-  // Draw row separator (skip in column 1 if badge preview is present)
-  if (!isFirstRow) {
-    page.drawLine({
-      start: { x: colXs[0], y: rowY - rowHeight },
-      end: { x: colXs[colXs.length-1] + formatColWidth, y: rowY - rowHeight },
-      thickness: 0.4,
-      color: lineGray,
-    });
-  } else {
-    // Only draw row line for columns 2-4
-    page.drawLine({
-      start: { x: colXs[1], y: rowY - rowHeight },
-      end: { x: colXs[colXs.length-1] + formatColWidth, y: rowY - rowHeight },
-      thickness: 0.4,
-      color: lineGray,
-    });
+// Fetch and embed Google Fonts
+async function embedGoogleFont(pdfDoc: any, fontFamily: string, isBold: boolean = false): Promise<any> {
+  const cacheKey = `${fontFamily}-${isBold}`;
+  
+  // Check cache first
+  if (fontCache.has(cacheKey)) {
+    return fontCache.get(cacheKey);
   }
-  // Column 1: badge image + background color (only for first row)
-  if (isFirstRow) {
-    // Align badge image top with header text (just below buffer)
-    const badgeImgY = headerY - headerHeight + 8;
-    // Use exact 3x1 inch size: 216pt x 72pt
-    page.drawRectangle({
-      x: colXs[0] + 4,
-      y: badgeImgY - 72 + fontSize, // 72pt = 1 inch
-      width: 216, // 3 inches
-      height: 72, // 1 inch
-      color: rgb(...cssColorToRgb(backgroundColor)),
-      borderColor: rgb(0.53, 0.53, 0.53),
-      borderWidth: 1,
-    });
-    // Draw badge text lines inside the box
-    const lines: BadgeLine[] = badge.lines.map((l: any) => ({
-      text: l.text,
-      size: pxToPtRounded(l.size),
-      color: l.color,
-      bold: l.bold,
-    }));
-    drawCenteredBadge({
-      page,
-      x: colXs[0] + 4,
-      y: badgeImgY - 72 + fontSize,
-      width: 216,
-      height: 72,
-      lines,
-      font,
-      color: cssColorToRgb(lines[0]?.color || '#000'),
-      lineSpacing: 1.3,
-    });
-    // Background color swatch and name below image
-    page.drawRectangle({
-      x: colXs[0] + 4,
-      y: badgeImgY - 72 - 14 + fontSize,
-      width: 16,
-      height: 12,
-      color: rgb(...cssColorToRgb(backgroundColor)),
-      borderColor: rgb(0,0,0),
-      borderWidth: 0.5,
-    });
-    page.drawText(getColorName(backgroundColor), {
-      x: colXs[0] + 24,
-      y: badgeImgY - 72 - 12 + fontSize,
-      size: fontSize,
-      font,
-      color: rgb(0,0,0),
-    });
-  }
-  // Column 2: Text & Font Size (bottom-aligned, text color matches column 3, wrap if needed)
-  const textColor = rgb(...cssColorToRgb(line.color));
-  const textPt = `${line.text}, ${pxToPtRounded(line.size)}pt`;
-  let textLines: string[] = [];
-  let currentLine = '';
-  for (const word of textPt.split(' ')) {
-    const testLine = currentLine ? currentLine + ' ' + word : word;
-    const width = font.widthOfTextAtSize(testLine, fontSize);
-    if (width > textColWidth - 8 && currentLine) {
-      textLines.push(currentLine);
-      currentLine = word;
-    } else {
-      currentLine = testLine;
+  
+  try {
+    const fontUrl = GOOGLE_FONT_URLS[fontFamily];
+    if (!fontUrl) {
+      console.warn(`Font ${fontFamily} not found, using Helvetica`);
+      const fallbackFont = isBold ? await pdfDoc.embedFont(StandardFonts.HelveticaBold) : await pdfDoc.embedFont(StandardFonts.Helvetica);
+      fontCache.set(cacheKey, fallbackFont);
+      return fallbackFont;
     }
+
+    // Fetch the font file
+    const response = await fetch(fontUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch font: ${response.statusText}`);
+    }
+    
+    const fontBytes = await response.arrayBuffer();
+    
+    // Embed the font
+    const embeddedFont = await pdfDoc.embedFont(fontBytes);
+    console.log(`Successfully embedded font: ${fontFamily} (${isBold ? 'bold' : 'regular'})`);
+    
+    // Cache the result
+    fontCache.set(cacheKey, embeddedFont);
+    return embeddedFont;
+  } catch (error) {
+    console.warn(`Failed to embed font ${fontFamily}, using Helvetica:`, error);
+    const fallbackFont = isBold ? await pdfDoc.embedFont(StandardFonts.HelveticaBold) : await pdfDoc.embedFont(StandardFonts.Helvetica);
+    fontCache.set(cacheKey, fallbackFont);
+    return fallbackFont;
   }
-  if (currentLine) textLines.push(currentLine);
-  let textY = rowY - rowHeight + 4 + (textLines.length - 1) * fontSize;
-  for (const lineText of textLines) {
-    page.drawText(lineText, {
-      x: colXs[1] + 2,
-      y: textY,
-      size: fontSize,
-      font,
-      color: textColor,
-    });
-    textY -= fontSize;
-  }
-  // Column 3: Text Color (swatch above color name, both bottom-aligned, color name 9pt)
-  const colorNameFontSize = 9;
-  const swatchWidth = 12;
-  const swatchHeight = 10;
-  const colorName = getColorName(line.color);
-  const colorNameWidth = font.widthOfTextAtSize(colorName, colorNameFontSize);
-  // Bottom Y for color name (aligned with text column)
-  const colorNameY = rowY - rowHeight + 4;
-  // Swatch bottom is 4pt above color name
-  const swatchX = colXs[2] + colorColWidth / 2 - swatchWidth / 2;
-  const swatchY = colorNameY + colorNameFontSize + 4;
-  page.drawRectangle({
-    x: swatchX,
-    y: swatchY,
-    width: swatchWidth,
-    height: swatchHeight,
-    color: textColor,
-    borderColor: rgb(0,0,0),
-    borderWidth: 0.5,
-  });
-  // Draw color name at the bottom, centered
-  page.drawText(colorName, {
-    x: colXs[2] + colorColWidth / 2 - colorNameWidth / 2,
-    y: colorNameY,
-    size: colorNameFontSize,
-    font,
-    color: rgb(0,0,0),
-  });
-  // Column 4: Format & Align (format on first line, align on next line)
-  let format = [];
-  if (line.bold) format.push('Bold');
-  if (line.italic) format.push('Italic');
-  if (line.underline) format.push('Underline');
-  const formatText = format.length ? format.join(', ') : 'None';
-  const alignText = line.alignment ? line.alignment.charAt(0).toUpperCase() + line.alignment.slice(1) : 'Center';
-  // Draw format text (aligned with text column)
-  page.drawText(formatText, {
-    x: colXs[3] + 2,
-    y: colorNameY + colorNameFontSize + 4,
-    size: 9,
-    font,
-    color: rgb(0,0,0),
-  });
-  // Draw alignment text (directly below format text)
-  page.drawText(alignText, {
-    x: colXs[3] + 2,
-    y: colorNameY,
-    size: 9,
-    font,
-    color: rgb(0,0,0),
-  });
 }
 
-export const generatePDF = async (badgeElement: HTMLElement, multipleBadges?: HTMLElement[]): Promise<void> => {
-  const pdfDoc = await PDFDocument.create();
-  let page = pdfDoc.addPage([595.28, 841.89]); // A4 in points
-  const { width: pageWidth } = page.getSize();
-  let yPos = 805;
-  const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  // Table column widths
-  const margin = 36; // 1/2 inch
-  const badgeColWidth = 216 + 20; // 216pt badge + 20pt padding
-  const colorColWidth = 40; // fixed small width for Text Color column
-  const formatColWidth = 60; // reduced width for Format & Align
-  const availableWidth = pageWidth - 2 * margin - badgeColWidth - colorColWidth - formatColWidth;
-  const textColWidth = availableWidth; // Text & Font Size gets the rest
-  const colWidths = [badgeColWidth, textColWidth, colorColWidth, formatColWidth];
-  const colXs = [margin];
-  for (let i = 0; i < colWidths.length - 1; i++) colXs.push(colXs[i] + colWidths[i]);
-  const rowHeight = 28;
-  const headerHeight = 28; // match data row height
-  const bufferHeight = 8; // 8pt buffer row above header
-  const lightGray = rgb(0.92, 0.92, 0.92);
-  const lineGray = rgb(0.8, 0.8, 0.8);
+/* ---------- Font mapping ---------- */
 
-  // For each badge
-  const allBadges = [badgeElement, ...(multipleBadges || [])];
-  allBadges.forEach((badgeEl, badgeIdx) => {
-    const badge = extractBadgeData(badgeEl);
-    // Add buffer row
-    yPos -= bufferHeight;
-    let headerY = yPos;
-    page.drawRectangle({ x: colXs[0], y: headerY + 6, width: colXs[colXs.length-1] + formatColWidth - colXs[0], height: headerHeight - 8, color: lightGray });
-    for (let c = 0; c < TABLE_HEADERS.length; c++) {
-      // Wrap header text if needed
-      const headerText = TABLE_HEADERS[c];
-      const colWidth = colWidths[c];
-      let headerLines: string[] = [];
-      let curHeader = '';
-      for (const word of headerText.split(' ')) {
-        const testHeader = curHeader ? curHeader + ' ' + word : word;
-        const width = helveticaBold.widthOfTextAtSize(testHeader, 11);
-        if (width > colWidth - 8 && curHeader) {
-          headerLines.push(curHeader);
-          curHeader = word;
-        } else {
-          curHeader = testHeader;
-        }
-      }
-      if (curHeader) headerLines.push(curHeader);
-      let headerTextY = headerY - headerHeight + 8 + (headerLines.length - 1) * 11;
-      for (const lineText of headerLines) {
-        page.drawText(lineText, {
-          x: colXs[c] + 2,
-          y: headerTextY,
-          size: 11,
-          font: helveticaBold,
-          color: rgb(0,0,0),
-        });
-        headerTextY -= 11;
-      }
-      // Draw vertical lines (thinner, lighter)
-      page.drawLine({
-        start: { x: colXs[c], y: headerY + 6 },
-        end: { x: colXs[c], y: headerY - headerHeight - rowHeight * badge.lines.length },
-        thickness: 0.4,
-        color: lineGray,
-      });
-      // Draw light color line at bottom of header cell
-      page.drawLine({
-        start: { x: colXs[c], y: headerY - headerHeight },
-        end: { x: colXs[c] + colWidths[c], y: headerY - headerHeight },
-        thickness: 0.4,
-        color: lineGray,
-      });
-    }
-    // Draw rightmost vertical line
-    page.drawLine({
-      start: { x: colXs[colXs.length-1] + formatColWidth, y: headerY + 6 },
-      end: { x: colXs[colXs.length-1] + formatColWidth, y: headerY - headerHeight - rowHeight * badge.lines.length },
-      thickness: 0.4,
-      color: lineGray,
-    });
-    yPos -= headerHeight;
-    // Draw rows for each line
-    badge.lines.forEach((line, lineIdx) => {
-      drawBadgeTableRow({
-        page,
-        rowY: yPos,
-        colXs,
-        rowHeight,
-        badgeImage: badge, // not used, but could be for future
+// Map custom fonts to available PDF-lib fonts
+function getPdfFont(fontFamily: string, isBold: boolean): any {
+  // For now, use Helvetica for all fonts since PDF-lib only supports standard fonts
+  // In a full implementation, you would embed the actual font files
+  return isBold ? StandardFonts.HelveticaBold : StandardFonts.Helvetica;
+}
+
+/* ---------- Simple PDF Generator ---------- */
+
+export const generatePDFNew = async (badgeData: Badge, multipleBadges?: Badge[]): Promise<void> => {
+  console.log('NEW PDF FUNCTION CALLED - v3.1 - FONT FIX');
+  try {
+    const pdfDoc = await PDFDocument.create();
+    const page = pdfDoc.addPage([595.28, 841.89]); // A4
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+    // Start from top of page with margin
+    let y = 800; // Start 40pt from top
+    const leftMargin = 50;
+    const rightMargin = 50;
+    const contentWidth = 595.28 - leftMargin - rightMargin;
+
+    console.log('Starting Y position:', y);
+    console.log('Content width:', contentWidth);
+
+    const allBadges = [badgeData, ...(multipleBadges || [])];
+
+    for (let idx = 0; idx < allBadges.length; idx++) {
+      const badge = allBadges[idx];
+      console.log(`Processing Badge ${idx + 1}:`, {
         backgroundColor: badge.backgroundColor,
-        line,
-        isFirstRow: lineIdx === 0,
-        font: helveticaFont,
-        fontBold: helveticaBold,
-        badgeLinesCount: badge.lines.length,
-        badge,
-        badgeBox: {},
-        headerY,
-        headerHeight,
-        bufferHeight,
-        textColWidth,
-        colorColWidth,
-        formatColWidth,
+        lines: badge.lines.map(l => ({
+          text: l.text,
+          color: l.color,
+          alignment: l.alignment,
+          size: l.size,
+          bold: l.bold,
+          fontFamily: l.fontFamily
+        }))
       });
-      yPos -= rowHeight;
-    });
-    yPos -= 30; // space between badges
-    // Page break if needed
-    if (yPos < 100 && badgeIdx < allBadges.length - 1) {
-      page = pdfDoc.addPage([595.28, 841.89]);
-      yPos = 805;
+      
+      // Debug: Log each line individually
+      badge.lines.forEach((line, lineIdx) => {
+        console.log(`Badge ${idx + 1}, Line ${lineIdx + 1}:`, {
+          text: `"${line.text}"`,
+          textLength: line.text?.length || 0,
+          color: line.color,
+          alignment: line.alignment,
+          size: line.size,
+          bold: line.bold,
+          fontFamily: line.fontFamily
+        });
+      });
+
+      // Badge header - smaller size
+      page.drawText(`Badge ${idx + 1}`, {
+        x: leftMargin,
+        y: y,
+        size: 12, // Reduced from 16
+        font: fontBold,
+        color: rgb(0, 0, 0),
+      });
+      y -= 25; // Reduced spacing
+
+      // Badge preview (left side)
+      const badgeWidth = 200;
+      const badgeHeight = 60;
+      const badgeX = leftMargin;
+      const badgeY = y - badgeHeight;
+
+      // Draw badge background
+      const bgColor = cssColorToRgb(badge.backgroundColor);
+      page.drawRectangle({
+        x: badgeX,
+        y: badgeY,
+        width: badgeWidth,
+        height: badgeHeight,
+        color: rgb(bgColor[0], bgColor[1], bgColor[2]),
+        borderColor: rgb(0, 0, 0),
+        borderWidth: 1,
+      });
+
+      // Draw badge text - match the iframe preview exactly
+      const paddingX = 14; // matches the px-4 in the iframe
+      const lineGap = 6; // visual gap between lines
+      
+      // Calculate total text height for centering
+      const totalTextHeight = badge.lines.reduce((sum, line) => {
+        const fontSize = pxToPtRounded(line.size || 12);
+        return sum + fontSize * 1.3; // lineHeight: 1.3
+      }, 0) + (badge.lines.length - 1) * lineGap;
+      
+      // Start from center of badge
+      let currentY = badgeY + (badgeHeight + totalTextHeight) / 2;
+      
+      // Process lines sequentially to handle async font embedding
+      for (let lineIdx = 0; lineIdx < badge.lines.length; lineIdx++) {
+        const line = badge.lines[lineIdx];
+        const fontSize = pxToPtRounded(line.size || 12);
+        const textColor = cssColorToRgb(line.color);
+        
+        // Use the embedGoogleFont function to get the actual font
+        const textFont = await embedGoogleFont(pdfDoc, line.fontFamily || 'Roboto', line.bold);
+        
+        // Clean up the text - remove extra quotes and handle empty text
+        const cleanText = (line.text || '').replace(/^"|"$/g, '').trim();
+        
+        // Skip rendering if text is empty
+        if (!cleanText) {
+          console.log(`Skipping empty line ${lineIdx + 1}`);
+          continue;
+        }
+        
+        // Calculate text position
+        const textWidth = textFont.widthOfTextAtSize(cleanText, fontSize);
+        let textX = badgeX + paddingX; // Default left alignment
+        
+        if (line.alignment === 'center') {
+          textX = badgeX + (badgeWidth - textWidth) / 2;
+        } else if (line.alignment === 'right') {
+          textX = badgeX + badgeWidth - paddingX - textWidth;
+        }
+        
+        // Position text baseline
+        const textY = currentY - fontSize * 0.7; // Adjust for text baseline
+        
+        page.drawText(cleanText, {
+          x: textX,
+          y: textY,
+          size: fontSize,
+          font: textFont,
+          color: rgb(textColor[0], textColor[1], textColor[2]),
+        });
+        
+        // Move to next line
+        currentY -= fontSize * 1.3 + lineGap; // lineHeight: 1.3 + gap
+      }
+
+      // Color swatch below badge
+      const swatchSize = 12;
+      const swatchY = badgeY - 20;
+      page.drawRectangle({
+        x: badgeX,
+        y: swatchY,
+        width: swatchSize,
+        height: swatchSize,
+        color: rgb(bgColor[0], bgColor[1], bgColor[2]),
+        borderColor: rgb(0, 0, 0),
+        borderWidth: 0.5,
+      });
+      
+      const hex = cssColorToHex(badge.backgroundColor);
+      const colorInfo = getColorInfo(hex) || { name: 'Custom', hex };
+      page.drawText(`${colorInfo.name} (${hex})`, {
+        x: badgeX + swatchSize + 5,
+        y: swatchY + 2,
+        size: 10,
+        font,
+        color: rgb(0, 0, 0),
+      });
+
+      // Specification table (right side) - increased size
+      const tableX = badgeX + badgeWidth + 20; // Reduced gap
+      const tableY = y;
+      const tableWidth = contentWidth - badgeWidth - 20; // Increased table width
+      const colWidths = [tableWidth * 0.45, tableWidth * 0.25, tableWidth * 0.3]; // Adjusted proportions
+      const rowHeight = 22; // Increased row height
+      const headerHeight = 22; // Increased header height
+
+      // Table headers
+      const headers = ['Text & Font', 'Text Color', 'Format & Align'];
+      headers.forEach((header, colIdx) => {
+        const colX = tableX + colWidths.slice(0, colIdx).reduce((sum, width) => sum + width, 0);
+        page.drawRectangle({
+          x: colX,
+          y: tableY - headerHeight,
+          width: colWidths[colIdx],
+          height: headerHeight,
+          color: rgb(0.9, 0.9, 0.9),
+          borderColor: rgb(0, 0, 0),
+          borderWidth: 0.5,
+        });
+        page.drawText(header, {
+          x: colX + 2,
+          y: tableY - headerHeight + 6,
+          size: 10,
+          font: fontBold,
+          color: rgb(0, 0, 0),
+        });
+      });
+
+      // Table rows
+      badge.lines.forEach((line, rowIdx) => {
+        const rowY = tableY - headerHeight - (rowIdx + 1) * rowHeight;
+        const rowColor = rowIdx % 2 === 0 ? rgb(1, 1, 1) : rgb(0.95, 0.95, 0.95);
+        
+        // Row background
+        page.drawRectangle({
+          x: tableX,
+          y: rowY,
+          width: tableWidth,
+          height: rowHeight,
+          color: rowColor,
+          borderColor: rgb(0, 0, 0),
+          borderWidth: 0.5,
+        });
+
+        // Column 1: Text & Font
+        const col1X = tableX;
+        const fontSize = pxToPtRounded(line.size || 12);
+        const fontName = line.fontFamily || 'Roboto';
+        
+        // Clean up the text for table display
+        const cleanText = (line.text || '').replace(/^"|"$/g, '').trim();
+        const displayText = cleanText || '(empty)';
+        
+        page.drawText(`${displayText}, ${fontSize}pt`, {
+          x: col1X + 2,
+          y: rowY + 12,
+          size: 9,
+          font,
+          color: rgb(0, 0, 0),
+        });
+        page.drawText(`${fontName} (rendered as Helvetica)`, {
+          x: col1X + 2,
+          y: rowY + 3,
+          size: 8,
+          font,
+          color: rgb(0, 0, 0),
+        });
+
+        // Column 2: Text Color
+        const col2X = tableX + colWidths[0];
+        const textColor = cssColorToRgb(line.color);
+        const textColorHex = cssColorToHex(line.color);
+        const textColorInfo = getColorInfo(textColorHex) || { name: 'Custom', hex: textColorHex };
+        
+        // Color swatch
+        page.drawRectangle({
+          x: col2X + 2,
+          y: rowY + 8,
+          width: 10,
+          height: 8,
+          color: rgb(textColor[0], textColor[1], textColor[2]),
+          borderColor: rgb(0, 0, 0),
+          borderWidth: 0.5,
+        });
+        
+        page.drawText(textColorInfo.name, {
+          x: col2X + 15,
+          y: rowY + 12,
+          size: 8,
+          font,
+          color: rgb(0, 0, 0),
+        });
+        page.drawText(textColorInfo.hex.toUpperCase(), {
+          x: col2X + 15,
+          y: rowY + 3,
+          size: 7,
+          font,
+          color: rgb(0, 0, 0),
+        });
+
+        // Column 3: Format & Align
+        const col3X = tableX + colWidths[0] + colWidths[1];
+        const format: string[] = [];
+        if (line.bold) format.push('Bold');
+        if (line.italic) format.push('Italic');
+        if (line.underline) format.push('Underline');
+        const formatText = format.length ? format.join(', ') : 'None';
+        const alignText = (line.alignment || 'center').replace(/^\w/, c => c.toUpperCase());
+        const combinedText = `${formatText} ${alignText}`;
+        
+        page.drawText(combinedText, {
+          x: col3X + 2,
+          y: rowY + 8,
+          size: 8,
+          font,
+          color: rgb(0, 0, 0),
+        });
+      });
+
+      // Move to next section
+      const sectionHeight = Math.max(badgeHeight + 40, (badge.lines.length + 1) * rowHeight + headerHeight) + 50;
+      y -= sectionHeight;
+      
+      console.log(`Badge ${idx + 1} completed, new Y:`, y);
     }
-  });
-  // Download
-  const pdfBytes = await pdfDoc.save();
-  const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = 'badge-design.pdf';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+
+    // Save & download
+    const pdfBytes = await pdfDoc.save();
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'badge-design.pdf';
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+  } catch (error) {
+    console.error('Error generating PDF:', error);
+    alert('Error generating PDF. Please try again.');
+  }
 };
 
 export const handleDownloadPDF = (): void => {
-  const badgeElement = document.querySelector('.badge-preview') as HTMLElement;
-  const multipleBadgeElements = Array.from(document.querySelectorAll('.badge-preview-multiple')) as HTMLElement[];
-  if (badgeElement) {
-    generatePDF(badgeElement, multipleBadgeElements);
-  }
-}; 
+  console.warn('handleDownloadPDF is deprecated. Use generatePDF with badge data instead.');
+};
