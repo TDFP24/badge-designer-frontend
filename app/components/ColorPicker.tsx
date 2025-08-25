@@ -11,13 +11,15 @@ interface ColorPickerProps {
   selectedColor: string;
   onChange: (color: string) => void;
   label: string;
+  disabled?: boolean;
 }
 
 export const ColorPicker: React.FC<ColorPickerProps> = ({
   colors,
   selectedColor,
   onChange,
-  label
+  label,
+  disabled = false
 }) => {
   return (
     <div className="mb-6">
@@ -28,10 +30,12 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
             key={color.value}
             className={`w-8 h-8 rounded-full border-2 transition-all ${
               selectedColor === color.value ? `ring-2 ring-offset-2 ${color.ring}` : ''
-            }`}
+            } ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:scale-110'}`}
             style={{ backgroundColor: color.value }}
-            onClick={() => onChange(color.value)}
+            onClick={() => !disabled && onChange(color.value)}
             title={color.name}
+            aria-label={color.name}
+            disabled={disabled}
           />
         ))}
       </div>
