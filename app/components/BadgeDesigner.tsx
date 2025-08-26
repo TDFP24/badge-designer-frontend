@@ -14,7 +14,7 @@ import {
   XMarkIcon,
   PencilIcon
 } from '@heroicons/react/24/outline';
-import { generatePDFNew as generatePDF } from '../utils/pdfGenerator';
+import { generatePDFWithLayoutEngine as generatePDF } from '../utils/pdfGenerator';
 import { BadgeTextLinesHeader } from './BadgeTextLinesHeader';
 import { BadgeEditPanel } from './BadgeEditPanel';
 import { BadgeLine, Badge } from '../types/badge';
@@ -75,6 +75,7 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [showExtendedBgPicker, setShowExtendedBgPicker] = useState(false);
 
+
   // Helper to estimate text width for a given font size and string
   const measureTextWidth = (text: string, fontSize: number, fontFamily: string, bold: boolean, italic: boolean) => {
     const canvas = document.createElement('canvas');
@@ -97,6 +98,8 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
     // Fallback minimum value (e.g., 8)
     return Math.max(testStr.length - 1, 8);
   };
+
+
 
   // Helper function to get proper font family with fallbacks
   const getFontFamily = (fontFamily: string) => {
@@ -757,6 +760,7 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
               <ArrowPathIcon className="w-5 h-5" />
               Reset
             </button>
+            
             <button
               className="control-button bg-blue-500 text-white hover:bg-blue-600 px-3 py-2 text-sm"
               style={{ minWidth: 120 }}
@@ -765,6 +769,9 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
               Add Multiple Badges
             </button>
           </div>
+          
+          
+          
           {/* Backing Options */}
           <div className="mb-4">
             <h3 className="font-semibold text-gray-700 mb-2">Backing Type</h3>

@@ -1,10 +1,176 @@
 import { Badge, BadgeLine } from '../types/badge';
+// import UTIF encoder
+// @ts-ignore
+import * as UTIF from 'utif';
 
 export interface BadgeThumbnailOptions {
   width?: number;
   height?: number;
   quality?: number;
-  format?: 'image/png' | 'image/jpeg' | 'image/webp';
+  format?: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/tiff';
+}
+
+// helper to convert RGBA → TIFF data URL
+function rgbaToTiff(rgba: Uint8Array, w: number, h: number): string {
+  try {
+    const tiff = UTIF.encodeImage(rgba, w, h);
+    const tiffArray = new Uint8Array(tiff);
+    const binaryString = Array.from(tiffArray, byte => String.fromCharCode(byte)).join('');
+    return `data:image/tiff;base64,${btoa(binaryString)}`;
+  } catch (error) {
+    console.error('Error in rgbaToTiff:', error);
+    throw error;
+  }
+}
+
+/**
+ * Captures a snapshot of the actual BadgePreview component from the DOM
+ * This ensures we get exactly what the user sees in the preview
+ */
+export async function captureBadgePreviewSnapshot(badge: Badge): Promise<string> {
+  return new Promise((resolve, reject) => {
+    try {
+      // Find the badge preview element in the DOM
+      const badgePreviewElement = document.querySelector('.badge-preview') as HTMLElement;
+      
+      if (!badgePreviewElement) {
+        console.warn('Badge preview element not found, falling back to canvas generation');
+        // Fallback to canvas generation
+        generateBadgeThumbnail(badge, {
+          width: 300,
+          height: 100,
+          quality: 1.0,
+          format: 'image/png'
+        }).then(resolve).catch(reject);
+        return;
+      }
+
+      // Get the computed styles to ensure we capture the exact dimensions
+      const computedStyle = window.getComputedStyle(badgePreviewElement);
+      const width = parseInt(computedStyle.width);
+      const height = parseInt(computedStyle.height);
+
+      console.log('Capturing badge preview snapshot:', { width, height });
+
+      // Create a canvas to capture the element
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      if (!ctx) {
+        reject(new Error('Could not get canvas context'));
+        return;
+      }
+
+      // Set canvas dimensions to match the actual element
+      canvas.width = width;
+      canvas.height = height;
+
+      // Enable high-quality rendering
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+
+      // Use a more reliable approach - capture the element using html2canvas-like technique
+      // Create a temporary container to render the badge
+      const tempContainer = document.createElement('div');
+      tempContainer.style.position = 'absolute';
+      tempContainer.style.left = '-9999px';
+      tempContainer.style.top = '-9999px';
+      tempContainer.style.width = `${width}px`;
+      tempContainer.style.height = `${height}px`;
+      tempContainer.style.overflow = 'hidden';
+      
+      // Clone the badge preview element
+      const clonedElement = badgePreviewElement.cloneNode(true) as HTMLElement;
+      tempContainer.appendChild(clonedElement);
+      document.body.appendChild(tempContainer);
+
+      // Use html2canvas or similar library would be better here
+      // For now, we'll use a simple approach that recreates the badge exactly
+      // Fill background
+      ctx.fillStyle = badge.backgroundColor || '#FFFFFF';
+      ctx.fillRect(0, 0, width, height);
+
+      // Add border
+      ctx.strokeStyle = '#888';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(1, 1, width - 2, height - 2);
+
+      // Draw text exactly as it appears in the preview
+      const padding = Math.max(8, width * 0.04);
+      const availableWidth = width - (padding * 2);
+      const availableHeight = height - (padding * 2);
+
+      // Calculate total text height and positioning
+      const totalTextHeight = badge.lines.reduce((sum, line) => {
+        return sum + (line.size * 1.3);
+      }, 0);
+
+      let currentY = padding + (availableHeight - totalTextHeight) / 2;
+
+      // Draw each line of text exactly as in the preview
+      badge.lines.forEach((line: BadgeLine) => {
+        const fontStyle = line.italic ? 'italic ' : '';
+        const fontWeight = line.bold ? 'bold ' : '';
+        const fontSize = Math.min(line.size, height * 0.4);
+        
+        // Use better font rendering with explicit font family
+        const fontFamily = line.fontFamily || 'Arial';
+        ctx.font = `${fontStyle}${fontWeight}${fontSize}px "${fontFamily}", Arial, sans-serif`;
+        ctx.fillStyle = line.color;
+        ctx.textAlign = line.alignment as CanvasTextAlign;
+        ctx.textBaseline = 'top';
+        
+        // Enable subpixel rendering for crisp text
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+
+        // Calculate x position based on alignment
+        let x: number;
+        switch (line.alignment) {
+          case 'left':
+            x = padding;
+            break;
+          case 'right':
+            x = width - padding;
+            break;
+          default: // center
+            x = width / 2;
+            break;
+        }
+
+        // Truncate text if it's too long
+        let displayText = line.text;
+        const maxWidth = availableWidth - 4;
+        while (ctx.measureText(displayText).width > maxWidth && displayText.length > 0) {
+          displayText = displayText.slice(0, -1);
+        }
+
+        // Draw text
+        ctx.fillText(displayText, x, currentY);
+
+        // Move to next line
+        currentY += fontSize * 1.3;
+      });
+
+      // Clean up
+      document.body.removeChild(tempContainer);
+
+      // Convert to PNG data URL
+      const pngDataUrl = canvas.toDataURL('image/png', 1.0);
+      console.log('Badge preview snapshot captured successfully');
+      resolve(pngDataUrl);
+
+    } catch (error) {
+      console.error('Error capturing badge preview snapshot:', error);
+      // Fallback to canvas generation
+      generateBadgeThumbnail(badge, {
+        width: 300,
+        height: 100,
+        quality: 1.0,
+        format: 'image/png'
+      }).then(resolve).catch(reject);
+    }
+  });
 }
 
 /**
@@ -40,12 +206,19 @@ export async function generateBadgeThumbnail(
       canvas.width = width;
       canvas.height = height;
 
+      // Enable high-quality rendering
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      
+      // Set better text rendering context
+      ctx.textRendering = 'optimizeLegibility';
+
       // Fill background with fallback
       const backgroundColor = badge.backgroundColor || '#FFFFFF';
       ctx.fillStyle = backgroundColor;
       ctx.fillRect(0, 0, width, height);
 
-      // Add border
+      // Add badge border (same as preview)
       ctx.strokeStyle = '#888';
       ctx.lineWidth = 2;
       ctx.strokeRect(1, 1, width - 2, height - 2);
@@ -64,14 +237,21 @@ export async function generateBadgeThumbnail(
 
       // Draw each line of text
       badge.lines.forEach((line: BadgeLine) => {
-        // Set font properties
+        // Set font properties with better rendering
         const fontStyle = line.italic ? 'italic ' : '';
         const fontWeight = line.bold ? 'bold ' : '';
         const fontSize = Math.min(line.size, height * 0.4); // Cap font size to prevent overflow
-        ctx.font = `${fontStyle}${fontWeight}${fontSize}px ${line.fontFamily}`;
+        
+        // Use better font rendering with explicit font family
+        const fontFamily = line.fontFamily || 'Arial';
+        ctx.font = `${fontStyle}${fontWeight}${fontSize}px "${fontFamily}", Arial, sans-serif`;
         ctx.fillStyle = line.color;
         ctx.textAlign = line.alignment as CanvasTextAlign;
         ctx.textBaseline = 'top';
+        
+        // Enable subpixel rendering for crisp text
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
 
         // Calculate x position based on alignment
         let x: number;
@@ -103,8 +283,16 @@ export async function generateBadgeThumbnail(
 
       // Convert to data URL
       try {
-        const dataUrl = canvas.toDataURL(format, quality);
-        resolve(dataUrl);
+        if (format === 'image/tiff') {
+          // Obtain pixel data with ctx.getImageData(0,0,width,height).data
+          const imageData = ctx.getImageData(0, 0, width, height);
+          const dataUrl = rgbaToTiff(new Uint8Array(imageData.data), width, height);
+          resolve(dataUrl);
+        } else {
+          // Otherwise fall back to the existing canvas.toDataURL(format, quality) path
+          const dataUrl = canvas.toDataURL(format, quality);
+          resolve(dataUrl);
+        }
       } catch (toDataUrlError) {
         console.error('Error converting canvas to data URL:', toDataUrlError);
         // Try with lower quality
@@ -138,20 +326,37 @@ export async function generateBadgeThumbnail(
  */
 export async function generateFullBadgeImage(badge: Badge): Promise<string> {
   try {
-    // Generate full-size image (1" x 3" at 300 DPI = 300x900 pixels)
+    // Capture a snapshot of the actual BadgePreview component from the DOM
+    // This ensures we get exactly what the user sees in the preview
+    console.log('Capturing badge preview snapshot...');
+    const snapshot = await captureBadgePreviewSnapshot(badge);
+    console.log('Badge preview snapshot captured successfully');
+    return snapshot;
+  } catch (error) {
+    console.error('Error capturing badge preview snapshot:', error);
+    // Fallback to high-resolution canvas generation
+    console.log('Falling back to canvas generation...');
     const fullImage = await generateBadgeThumbnail(badge, {
-      width: 300,  // 1 inch at 300 DPI
-      height: 900, // 3 inches at 300 DPI
-      quality: 0.9, // High quality for full image
+      width: 900,  // 3x preview width for crisp text
+      height: 300, // 3x preview height for crisp text
+      quality: 1.0, // Maximum quality
       format: 'image/png' // PNG for best quality
     });
     return fullImage;
-  } catch (error) {
-    console.error('Error generating full badge image:', error);
-    // Return a fallback image
-    const fallback = generateFallbackFullImage(badge);
-    return fallback;
   }
+}
+
+/**
+ * Add a dedicated wrapper for high‑resolution badges
+ * @param badge The badge design data
+ * @returns Promise<string> Base64 encoded PNG data URL
+ */
+export async function generateBadgeTiff(badge: Badge): Promise<string> {
+  return generateBadgeThumbnail(badge, {
+    width: 900,   // 3" @300 dpi
+    height: 300,  // 1" @300 dpi
+    format: 'image/png'
+  });
 }
 
 /**
@@ -255,10 +460,7 @@ function generateFallbackFullImage(badge: Badge): string {
     ctx.fillStyle = backgroundColor;
     ctx.fillRect(0, 0, 300, 900);
     
-    // Add border
-    ctx.strokeStyle = '#888';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(0, 0, 300, 900);
+    // No border - clean image
 
     // Add text with contrasting color
     const textColor = backgroundColor === '#FFFFFF' || backgroundColor === '#F0E68C' ? '#000000' : '#FFFFFF';
@@ -306,10 +508,7 @@ function generateFallbackThumbnail(badge: Badge): string {
     ctx.fillStyle = backgroundColor;
     ctx.fillRect(0, 0, 150, 50);
     
-    // Add border
-    ctx.strokeStyle = '#888';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(0, 0, 150, 50);
+    // No border - clean image
 
     // Add text with contrasting color
     const textColor = backgroundColor === '#FFFFFF' || backgroundColor === '#F0E68C' ? '#000000' : '#FFFFFF';

@@ -11,8 +11,12 @@ interface BadgePreviewProps {
 export const BadgePreview: React.FC<BadgePreviewProps> = ({ 
   badge, 
   className = '', 
-  isMultiple = false 
+  isMultiple = false
 }) => {
+
+
+
+  // Fallback to original CSS-based rendering
   return (
     <div 
       className={`relative flex items-center justify-center rounded-lg border-2 w-full ${
