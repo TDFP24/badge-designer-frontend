@@ -14,7 +14,7 @@ import {
   XMarkIcon,
   PencilIcon
 } from '@heroicons/react/24/outline';
-import { generatePDFWithLayoutEngine as generatePDF } from '../utils/pdfGenerator';
+import { generatePDF } from '../utils/pdfGenerator';
 import { BadgeTextLinesHeader } from './BadgeTextLinesHeader';
 import { BadgeEditPanel } from './BadgeEditPanel';
 import { BadgeLine, Badge } from '../types/badge';

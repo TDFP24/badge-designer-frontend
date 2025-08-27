@@ -1,65 +1,33 @@
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { Badge } from '../types/badge';
 import { getColorInfo } from '../constants/colors';
-import { generateBadgeTiff, generateFullBadgeImage } from './badgeThumbnail';
+import { generateFullBadgeImage } from './badgeThumbnail';
 
-/* ---------- Color utils ---------- */
-
-// rgb()/hex → [0..1] rgb
-function cssColorToRgb(color: string): [number, number, number] {
-  if (!color) return [0, 0, 0];
+// Helper function to convert CSS color to hex
+function cssColorToHex(cssColor: string): string {
+  // Create a temporary element to use the browser's color parsing
+  const temp = document.createElement('div');
+  temp.style.color = cssColor;
+  document.body.appendChild(temp);
+  const computedColor = window.getComputedStyle(temp).color;
+  document.body.removeChild(temp);
   
-  // Normalize the color string
-  const normalizedColor = color.trim().toLowerCase();
-
-  if (normalizedColor.startsWith('rgb')) {
-    const rgbArr = normalizedColor.match(/\d+/g)?.map(Number) || [0, 0, 0];
-    return [rgbArr[0] / 255, rgbArr[1] / 255, rgbArr[2] / 255];
+  // Convert RGB to hex
+  const rgbMatch = computedColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+  if (rgbMatch) {
+    const r = parseInt(rgbMatch[1]).toString(16).padStart(2, '0');
+    const g = parseInt(rgbMatch[2]).toString(16).padStart(2, '0');
+    const b = parseInt(rgbMatch[3]).toString(16).padStart(2, '0');
+    return `#${r}${g}${b}`.toUpperCase();
   }
-  if (normalizedColor.startsWith('#')) {
-    let hex = normalizedColor.slice(1);
-    if (hex.length === 3) hex = hex.split('').map(x => x + x).join('');
-    const num = parseInt(hex, 16);
-    return [((num >> 16) & 255) / 255, ((num >> 8) & 255) / 255, (num & 255) / 255];
-  }
-  // Fallback: try getColorInfo (if caller passed a named color we support)
-  const info = getColorInfo(normalizedColor) || getColorInfo('#000000');
-  const hex = info?.hex?.toUpperCase?.() || '#000000';
-  return cssColorToRgb(hex);
+  
+  return cssColor.startsWith('#') ? cssColor.toUpperCase() : '#000000';
 }
 
-// Normalise to #RRGGBB (uppercase)
-function cssColorToHex(color: string): string {
-  if (!color) return '#000000';
-  
-  // Normalize the color string
-  const normalizedColor = color.trim().toLowerCase();
-  
-  if (normalizedColor.startsWith('rgb')) {
-    const [r, g, b] = normalizedColor.match(/\d+/g)?.map(Number) || [0, 0, 0];
-    return (
-      '#' +
-      r.toString(16).padStart(2, '0') +
-      g.toString(16).padStart(2, '0') +
-      b.toString(16).padStart(2, '0')
-    ).toUpperCase();
-  }
-  if (normalizedColor.startsWith('#')) {
-    let hex = normalizedColor.slice(1);
-    if (hex.length === 3) hex = hex.split('').map(x => x + x).join('');
-    return ('#' + hex).toUpperCase();
-  }
-  // Try lookup
-  const info = getColorInfo(normalizedColor);
-  if (info?.hex) return info.hex.toUpperCase();
-  return '#000000';
+// Helper function to convert pixels to points (1 point = 1/72 inch)
+function pxToPt(px: number): number {
+  return px * 0.75; // Approximate conversion
 }
-
-/* ---------- Units ---------- */
-
-// Convert px to pt
-const pxToPt = (px: number) => px * 0.75;
-const pxToPtRounded = (px: number) => Math.round(pxToPt(px));
 
 /* ---------- NEW SIMPLE PDF GENERATOR ---------- */
 
@@ -72,12 +40,12 @@ export const generatePDFNew = async (badgeData: Badge, multipleBadges?: Badge[])
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-         // Simple layout: two horizontal rectangles side by side
-     const margin = 30;
-     const imageWidth = 300;  // Display size (will scale down from 900px)
-     const imageHeight = 100; // Display size (will scale down from 300px)
-     const tableX = margin + imageWidth + 20;
-     const tableWidth = 595.28 - tableX - margin;
+    // Simple layout: two horizontal rectangles side by side
+    const margin = 30;
+    const imageWidth = 300;  // Display size (will scale down from 900px)
+    const imageHeight = 100; // Display size (will scale down from 300px)
+    const tableX = margin + imageWidth + 20;
+    const tableWidth = 595.28 - tableX - margin;
     
     let y = 800; // Start from top
 
@@ -92,48 +60,48 @@ export const generatePDFNew = async (badgeData: Badge, multipleBadges?: Badge[])
       const imageDataUrl = await generateFullBadgeImage(badge);
       console.log('Image generated successfully');
 
-             // Convert to Uint8Array and embed
-       const base64Data = imageDataUrl.split(',')[1];
-       const imageBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
-       const pdfImage = await pdfDoc.embedPng(imageBytes);
-       console.log('Image embedded in PDF');
-       console.log('PDF image dimensions:', { width: pdfImage.width, height: pdfImage.height });
+      // Convert to Uint8Array and embed
+      const base64Data = imageDataUrl.split(',')[1];
+      const imageBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+      const pdfImage = await pdfDoc.embedPng(imageBytes);
+      console.log('Image embedded in PDF');
+      console.log('PDF image dimensions:', { width: pdfImage.width, height: pdfImage.height });
 
-             // Draw image on left side (fixed size, no scaling issues)
-       page.drawImage(pdfImage, {
-         x: margin,
-         y: y - imageHeight,
-         width: imageWidth,
-         height: imageHeight,
-       });
-       console.log('Image drawn at:', { x: margin, y: y - imageHeight, width: imageWidth, height: imageHeight });
+      // Draw image on left side (fixed size, no scaling issues)
+      page.drawImage(pdfImage, {
+        x: margin,
+        y: y - imageHeight,
+        width: imageWidth,
+        height: imageHeight,
+      });
+      console.log('Image drawn at:', { x: margin, y: y - imageHeight, width: imageWidth, height: imageHeight });
 
-             // Draw badge title (smaller, left-justified)
-       page.drawText(`Badge ${idx + 1}`, {
-         x: margin,
-         y: y + 10,
-         size: 12,
-         font: fontBold,
-         color: rgb(0, 0, 0),
-       });
+      // Draw badge title (smaller, left-justified)
+      page.drawText(`Badge ${idx + 1}`, {
+        x: margin,
+        y: y + 10,
+        size: 12,
+        font: fontBold,
+        color: rgb(0, 0, 0),
+      });
 
-       // Draw background color under the image
-       const hex = cssColorToHex(badge.backgroundColor);
-       const colorInfo = getColorInfo(hex) || { name: 'Custom', hex };
-       page.drawText(`Background: ${colorInfo.name} (${hex})`, {
-         x: margin,
-         y: y - imageHeight - 10,
-         size: 9,
-         font,
-         color: rgb(0, 0, 0),
-       });
+      // Draw background color under the image
+      const hex = cssColorToHex(badge.backgroundColor);
+      const colorInfo = getColorInfo(hex) || { name: 'Custom', hex };
+      page.drawText(`Background: ${colorInfo.name} (${hex})`, {
+        x: margin,
+        y: y - imageHeight - 10,
+        size: 9,
+        font,
+        color: rgb(0, 0, 0),
+      });
 
-              // Draw specification table (no headers) - level with image
-       let tableY = y;  // Start at same Y as image
-       const rowHeight = 16;  // Smaller rows
+      // Draw specification table (no headers) - level with image
+      let tableY = y;  // Start at same Y as image
+      const rowHeight = 16;  // Smaller rows
 
-             // Table rows
-       let rowIdx = 0;
+      // Table rows
+      let rowIdx = 0;
 
       // Text lines
       badge.lines.forEach((line, lineIdx) => {
@@ -148,94 +116,93 @@ export const generatePDFNew = async (badgeData: Badge, multipleBadges?: Badge[])
         const styleText = style.length ? style.join(', ') : 'Normal';
         const alignText = (line.alignment || 'center').replace(/^\w/, c => c.toUpperCase());
 
-                          const rowY = tableY - (rowIdx + 1) * rowHeight;
-         page.drawRectangle({
-           x: tableX,
-           y: rowY,
-           width: tableWidth,
-           height: rowHeight,
-           color: rowIdx % 2 === 0 ? rgb(1, 1, 1) : rgb(0.95, 0.95, 0.95),
-           borderColor: rgb(0, 0, 0),
-           borderWidth: 0.5,
-         });
+        const rowY = tableY - (rowIdx + 1) * rowHeight;
+        page.drawRectangle({
+          x: tableX,
+          y: rowY,
+          width: tableWidth,
+          height: rowHeight,
+          color: rowIdx % 2 === 0 ? rgb(1, 1, 1) : rgb(0.95, 0.95, 0.95),
+          borderColor: rgb(0, 0, 0),
+          borderWidth: 0.5,
+        });
 
-         page.drawText(`Line ${lineIdx + 1}: "${cleanText}"`, {
-           x: tableX + 5,
-           y: rowY + 4,
-           size: 8,
-           font,
-           color: rgb(0, 0, 0),
-         });
+        page.drawText(`Line ${lineIdx + 1}: "${cleanText}"`, {
+          x: tableX + 5,
+          y: rowY + 4,
+          size: 8,
+          font,
+          color: rgb(0, 0, 0),
+        });
         rowIdx++;
 
-                 // Font details
-         const fontRowY = tableY - (rowIdx + 1) * rowHeight;
-         page.drawRectangle({
-           x: tableX,
-           y: fontRowY,
-           width: tableWidth,
-           height: rowHeight,
-           color: rowIdx % 2 === 0 ? rgb(1, 1, 1) : rgb(0.95, 0.95, 0.95),
-           borderColor: rgb(0, 0, 0),
-           borderWidth: 0.5,
-         });
-         page.drawText(`Font: ${fontName} ${fontSize}pt (${styleText})`, {
-           x: tableX + 5,
-           y: fontRowY + 4,
-           size: 8,
-           font,
-           color: rgb(0, 0, 0),
-         });
+        // Font details
+        const fontRowY = tableY - (rowIdx + 1) * rowHeight;
+        page.drawRectangle({
+          x: tableX,
+          y: fontRowY,
+          width: tableWidth,
+          height: rowHeight,
+          color: rowIdx % 2 === 0 ? rgb(1, 1, 1) : rgb(0.95, 0.95, 0.95),
+          borderColor: rgb(0, 0, 0),
+          borderWidth: 0.5,
+        });
+        page.drawText(`Font: ${fontName} ${fontSize}pt (${styleText})`, {
+          x: tableX + 5,
+          y: fontRowY + 4,
+          size: 8,
+          font,
+          color: rgb(0, 0, 0),
+        });
         rowIdx++;
 
-                 // Color details
-         const colorRowY = tableY - (rowIdx + 1) * rowHeight;
-         page.drawRectangle({
-           x: tableX,
-           y: colorRowY,
-           width: tableWidth,
-           height: rowHeight,
-           color: rowIdx % 2 === 0 ? rgb(1, 1, 1) : rgb(0.95, 0.95, 0.95),
-           borderColor: rgb(0, 0, 0),
-           borderWidth: 0.5,
-         });
-         page.drawText(`Color: ${textColor}`, {
-           x: tableX + 5,
-           y: colorRowY + 4,
-           size: 8,
-           font,
-           color: rgb(0, 0, 0),
-         });
+        // Color details
+        const colorRowY = tableY - (rowIdx + 1) * rowHeight;
+        page.drawRectangle({
+          x: tableX,
+          y: colorRowY,
+          width: tableWidth,
+          height: rowHeight,
+          color: rowIdx % 2 === 0 ? rgb(1, 1, 1) : rgb(0.95, 0.95, 0.95),
+          borderColor: rgb(0, 0, 0),
+          borderWidth: 0.5,
+        });
+        page.drawText(`Color: ${textColor}`, {
+          x: tableX + 5,
+          y: colorRowY + 4,
+          size: 8,
+          font,
+          color: rgb(0, 0, 0),
+        });
         rowIdx++;
 
-                 // Alignment details
-         const alignRowY = tableY - (rowIdx + 1) * rowHeight;
-         page.drawRectangle({
-           x: tableX,
-           y: alignRowY,
-           width: tableWidth,
-           height: rowHeight,
-           color: rowIdx % 2 === 0 ? rgb(1, 1, 1) : rgb(0.95, 0.95, 0.95),
-           borderColor: rgb(0, 0, 0),
-           borderWidth: 0.5,
-         });
-         page.drawText(`Alignment: ${alignText}`, {
-           x: tableX + 5,
-           y: alignRowY + 4,
-           size: 8,
-           font,
-           color: rgb(0, 0, 0),
-         });
+        // Alignment details
+        const alignRowY = tableY - (rowIdx + 1) * rowHeight;
+        page.drawRectangle({
+          x: tableX,
+          y: alignRowY,
+          width: tableWidth,
+          height: rowHeight,
+          color: rowIdx % 2 === 0 ? rgb(1, 1, 1) : rgb(0.95, 0.95, 0.95),
+          borderColor: rgb(0, 0, 0),
+          borderWidth: 0.5,
+        });
+        page.drawText(`Alignment: ${alignText}`, {
+          x: tableX + 5,
+          y: alignRowY + 4,
+          size: 8,
+          font,
+          color: rgb(0, 0, 0),
+        });
         rowIdx++;
       });
 
       // Move to next badge
-      const totalRows = 1 + (badge.lines.length * 4); // Background + 4 rows per text line
-               const tableHeight = totalRows * rowHeight;
+      const totalRows = badge.lines.length * 4; // 4 rows per text line
+      const tableHeight = totalRows * rowHeight;
       const sectionHeight = Math.max(imageHeight + 20, tableHeight + 20);
       y -= sectionHeight;
       
-      console.log(`Badge ${idx + 1} completed, new Y:`, y);
     }
 
     // Save & download
@@ -258,17 +225,5 @@ export const generatePDFNew = async (badgeData: Badge, multipleBadges?: Badge[])
   }
 };
 
-export const handleDownloadPDF = (): void => {
-  console.warn('handleDownloadPDF is deprecated. Use generatePDF with badge data instead.');
-};
-
-/**
- * Generate PDF using the unified layout engine
- * This ensures perfect consistency between preview and PDF output
- */
-export const generatePDFWithLayoutEngine = async (badgeData: Badge, multipleBadges?: Badge[]): Promise<void> => {
-  console.log('LAYOUT ENGINE PDF GENERATION - v1.0');
-  
-  // For now, just call the original PDF generator
-  await generatePDFNew(badgeData, multipleBadges);
-};
+// Export the main function as the default
+export const generatePDF = generatePDFNew;

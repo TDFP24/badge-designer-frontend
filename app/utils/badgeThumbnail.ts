@@ -1,26 +1,10 @@
 import { Badge, BadgeLine } from '../types/badge';
-// import UTIF encoder
-// @ts-ignore
-import * as UTIF from 'utif';
 
 export interface BadgeThumbnailOptions {
   width?: number;
   height?: number;
   quality?: number;
-  format?: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/tiff';
-}
-
-// helper to convert RGBA → TIFF data URL
-function rgbaToTiff(rgba: Uint8Array, w: number, h: number): string {
-  try {
-    const tiff = UTIF.encodeImage(rgba, w, h);
-    const tiffArray = new Uint8Array(tiff);
-    const binaryString = Array.from(tiffArray, byte => String.fromCharCode(byte)).join('');
-    return `data:image/tiff;base64,${btoa(binaryString)}`;
-  } catch (error) {
-    console.error('Error in rgbaToTiff:', error);
-    throw error;
-  }
+  format?: 'image/png' | 'image/jpeg' | 'image/webp';
 }
 
 /**
@@ -283,16 +267,8 @@ export async function generateBadgeThumbnail(
 
       // Convert to data URL
       try {
-        if (format === 'image/tiff') {
-          // Obtain pixel data with ctx.getImageData(0,0,width,height).data
-          const imageData = ctx.getImageData(0, 0, width, height);
-          const dataUrl = rgbaToTiff(new Uint8Array(imageData.data), width, height);
-          resolve(dataUrl);
-        } else {
-          // Otherwise fall back to the existing canvas.toDataURL(format, quality) path
-          const dataUrl = canvas.toDataURL(format, quality);
-          resolve(dataUrl);
-        }
+        const dataUrl = canvas.toDataURL(format, quality);
+        resolve(dataUrl);
       } catch (toDataUrlError) {
         console.error('Error converting canvas to data URL:', toDataUrlError);
         // Try with lower quality
@@ -344,19 +320,6 @@ export async function generateFullBadgeImage(badge: Badge): Promise<string> {
     });
     return fullImage;
   }
-}
-
-/**
- * Add a dedicated wrapper for high‑resolution badges
- * @param badge The badge design data
- * @returns Promise<string> Base64 encoded PNG data URL
- */
-export async function generateBadgeTiff(badge: Badge): Promise<string> {
-  return generateBadgeThumbnail(badge, {
-    width: 900,   // 3" @300 dpi
-    height: 300,  // 1" @300 dpi
-    format: 'image/png'
-  });
 }
 
 /**
@@ -416,11 +379,10 @@ export async function generateThumbnailFromFullImage(
  */
 export async function generateCartThumbnail(badge: Badge): Promise<string> {
   try {
-    // Create a properly sized thumbnail for cart display
     const thumbnail = await generateBadgeThumbnail(badge, {
-      width: 100,  // Smaller width for cart properties
-      height: 50,  // Smaller height for cart properties
-      quality: 0.7, // Lower quality to reduce size
+      width: 150,
+      height: 50,
+      quality: 0.8,
       format: 'image/png' // Use PNG for better text clarity
     });
     return thumbnail;
