@@ -25,7 +25,7 @@ export const BadgePreview: React.FC<BadgePreviewProps> = ({
       style={{
         width: BADGE_CONSTANTS.BADGE_WIDTH,
         height: BADGE_CONSTANTS.BADGE_HEIGHT,
-        background: badge.backgroundColor,
+        background: badge.backgroundImage ? 'transparent' : badge.backgroundColor, // Don't show background color if image is present
         borderColor: '#888',
         boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
         position: 'relative',

@@ -241,7 +241,18 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
   const handleSavePositionedImage = (positionedImage: BadgeImage | string) => {
     if (positioningType === 'background') {
       console.log('Saving background:', positionedImage);
-      setBadge({ ...badge, backgroundImage: positionedImage as BadgeImage });
+      // When background image is added, suggest better text colors for readability
+      const updatedBadge = { ...badge, backgroundImage: positionedImage as BadgeImage };
+      
+      // If any text lines are using black color, suggest white for better contrast
+      const updatedLines = updatedBadge.lines.map(line => {
+        if (line.color === '#000000') {
+          return { ...line, color: '#FFFFFF' }; // Suggest white text for dark backgrounds
+        }
+        return line;
+      });
+      
+      setBadge({ ...updatedBadge, lines: updatedLines });
     } else {
       console.log('Saving logo:', positionedImage);
       setBadge({ ...badge, logo: positionedImage as BadgeImage });
@@ -734,22 +745,43 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
           <div className="flex flex-row gap-6 items-center w-full mb-6">
             {/* Background Color Picker */}
             <div className="flex flex-col items-start justify-center min-w-[120px] pr-2" style={{ alignSelf: 'flex-start' }}>
-              <span className="font-semibold text-gray-700 mb-2">Background Color</span>
+              <span className="font-semibold text-gray-700 mb-2">
+                Background Color
+                {badge.backgroundImage && (
+                  <span className="ml-2 text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded">
+                    Image Active
+                  </span>
+                )}
+              </span>
               <div className="grid grid-cols-4 gap-2">
                 {backgroundColors.map((bg: any) => (
                   <button
                     key={bg.value}
-                    className={`color-button ${badge.backgroundColor === bg.value ? 'ring-2 ring-offset-2 ' + bg.ring : ''}`}
+                    className={`color-button ${badge.backgroundColor === bg.value ? 'ring-2 ring-offset-2 ' + bg.ring : ''} ${badge.backgroundImage ? 'opacity-50 cursor-not-allowed' : ''}`}
                     style={{ backgroundColor: bg.value }}
-                    onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.preventDefault(); setBadge({ ...badge, backgroundColor: bg.value }); }}
-                    title={bg.name}
+                    onClick={(e: React.MouseEvent<HTMLButtonElement>) => { 
+                      e.preventDefault(); 
+                      if (!badge.backgroundImage) {
+                        setBadge({ ...badge, backgroundColor: bg.value }); 
+                      }
+                    }}
+                    title={badge.backgroundImage ? 'Remove background image first' : bg.name}
+                    disabled={!!badge.backgroundImage}
                   />
                 ))}
               </div>
               <button
-                className="mt-3 text-xs px-2 py-1 border rounded bg-white hover:bg-gray-50"
-                onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.preventDefault(); setShowExtendedBgPicker(true); }}
-              >More colors…</button>
+                className={`mt-3 text-xs px-2 py-1 border rounded ${badge.backgroundImage ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white hover:bg-gray-50'}`}
+                onClick={(e: React.MouseEvent<HTMLButtonElement>) => { 
+                  e.preventDefault(); 
+                  if (!badge.backgroundImage) {
+                    setShowExtendedBgPicker(true); 
+                  }
+                }}
+                disabled={!!badge.backgroundImage}
+              >
+                {badge.backgroundImage ? 'Image Active' : 'More colors…'}
+              </button>
             </div>
             {/* Preview Box */}
             <div className="flex items-center justify-center rounded border w-full max-w-[300px] badge-preview" style={{
@@ -867,7 +899,14 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
               ...badge,
               lines: badge.lines.map((l: any, i: number) => i === index ? { ...l, alignment: (alignment as 'left' | 'center' | 'right') } : l) as BadgeLine[]
             })}
-            onBackgroundColorChange={(backgroundColor) => setBadge({ ...badge, backgroundColor })}
+            onBackgroundColorChange={(backgroundColor) => {
+              // When background color is changed, clear any background image
+              setBadge({ 
+                ...badge, 
+                backgroundColor,
+                backgroundImage: undefined // Clear background image when color is selected
+              });
+            }}
             onRemoveLine={removeLine}
             addLine={addLine}
             showRemove={true}

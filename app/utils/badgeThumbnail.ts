@@ -12,7 +12,7 @@ export interface BadgeThumbnailOptions {
  * This ensures we get exactly what the user sees in the preview with high quality
  */
 export async function captureBadgePreviewSnapshot(badge: Badge): Promise<string> {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     try {
       // Find the badge preview element in the DOM
       const badgePreviewElement = document.querySelector('.badge-preview') as HTMLElement;
@@ -58,7 +58,12 @@ export async function captureBadgePreviewSnapshot(badge: Badge): Promise<string>
       ctx.scale(scale, scale);
 
       // Fill background exactly as in preview
-      ctx.fillStyle = badge.backgroundColor || '#FFFFFF';
+      if (badge.backgroundImage) {
+        // If background image exists, use transparent background initially
+        ctx.fillStyle = 'transparent';
+      } else {
+        ctx.fillStyle = badge.backgroundColor || '#FFFFFF';
+      }
       ctx.fillRect(0, 0, displayWidth, displayHeight);
 
       // Apply rounded corners exactly like BadgeDesigner (rounded class)
@@ -87,6 +92,32 @@ export async function captureBadgePreviewSnapshot(badge: Badge): Promise<string>
       ctx.lineWidth = 2;
       ctx.strokeRect(1, 1, displayWidth - 2, displayHeight - 2);
       ctx.restore();
+
+      // Draw background image if present (async for PDF generation)
+      if (badge.backgroundImage) {
+        const bgImg = new Image();
+        const backgroundImageData = badge.backgroundImage;
+        
+        // Wait for background image to load
+        await new Promise<void>((resolve, reject) => {
+          bgImg.onload = () => resolve();
+          bgImg.onerror = () => reject(new Error('Background image failed to load'));
+          bgImg.src = typeof backgroundImageData === 'string' ? backgroundImageData : backgroundImageData.src;
+        });
+        
+        // Now draw the background image
+        if (typeof backgroundImageData === 'string') {
+          // Simple background image (cover mode)
+          ctx.drawImage(bgImg, 0, 0, displayWidth, displayHeight);
+        } else {
+          // Positioned background image
+          ctx.save();
+          ctx.translate(backgroundImageData.x, backgroundImageData.y);
+          ctx.scale(backgroundImageData.scale, backgroundImageData.scale);
+          ctx.drawImage(bgImg, 0, 0);
+          ctx.restore();
+        }
+      }
 
       // Add border exactly as in preview
       ctx.strokeStyle = '#888';
@@ -150,6 +181,25 @@ export async function captureBadgePreviewSnapshot(badge: Badge): Promise<string>
         currentY += fontSize * 1.3;
       });
 
+      // Draw logo if present (after text so it appears on top)
+      if (badge.logo) {
+        const logoImg = new Image();
+        
+        // Wait for logo image to load
+        await new Promise<void>((resolve, reject) => {
+          logoImg.onload = () => resolve();
+          logoImg.onerror = () => reject(new Error('Logo image failed to load'));
+          logoImg.src = badge.logo!.src;
+        });
+        
+        // Now draw the logo
+        ctx.save();
+        ctx.translate(badge.logo!.x, badge.logo!.y);
+        ctx.scale(badge.logo!.scale, badge.logo!.scale);
+        ctx.drawImage(logoImg, 0, 0);
+        ctx.restore();
+      }
+
       console.log('High-resolution badge preview snapshot captured successfully, dimensions:', {
         displayWidth,
         displayHeight,
@@ -192,7 +242,7 @@ export async function generateBadgeThumbnail(
     format = 'image/png'
   } = options;
 
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     try {
       // Create canvas element
       const canvas = document.createElement('canvas');
@@ -216,8 +266,13 @@ export async function generateBadgeThumbnail(
       ctx.textRendering = 'optimizeLegibility';
 
       // Fill background with fallback
-      const backgroundColor = badge.backgroundColor || '#FFFFFF';
-      ctx.fillStyle = backgroundColor;
+      if (badge.backgroundImage) {
+        // If background image exists, use transparent background
+        ctx.fillStyle = 'transparent';
+      } else {
+        const backgroundColor = badge.backgroundColor || '#FFFFFF';
+        ctx.fillStyle = backgroundColor;
+      }
       ctx.fillRect(0, 0, width, height);
 
       // Add badge border (same as preview)
@@ -282,6 +337,51 @@ export async function generateBadgeThumbnail(
         // Move to next line
         currentY += fontSize * 1.3;
       });
+
+      // Draw background image if present (before text)
+      if (badge.backgroundImage) {
+        const bgImg = new Image();
+        const backgroundImageData = badge.backgroundImage;
+        
+        // Wait for background image to load
+        await new Promise<void>((resolve, reject) => {
+          bgImg.onload = () => resolve();
+          bgImg.onerror = () => reject(new Error('Background image failed to load in fallback'));
+          bgImg.src = typeof backgroundImageData === 'string' ? backgroundImageData : backgroundImageData.src;
+        });
+        
+        // Now draw the background image
+        if (typeof backgroundImageData === 'string') {
+          // Simple background image (cover mode)
+          ctx.drawImage(bgImg, 0, 0, width, height);
+        } else {
+          // Positioned background image
+          ctx.save();
+          ctx.translate(backgroundImageData.x, backgroundImageData.y);
+          ctx.scale(backgroundImageData.scale, backgroundImageData.scale);
+          ctx.drawImage(bgImg, 0, 0);
+          ctx.restore();
+        }
+      }
+
+      // Draw logo if present (after text so it appears on top)
+      if (badge.logo) {
+        const logoImg = new Image();
+        
+        // Wait for logo image to load
+        await new Promise<void>((resolve, reject) => {
+          logoImg.onload = () => resolve();
+          logoImg.onerror = () => reject(new Error('Logo image failed to load in fallback'));
+          logoImg.src = badge.logo!.src;
+        });
+        
+        // Now draw the logo
+        ctx.save();
+        ctx.translate(badge.logo!.x, badge.logo!.y);
+        ctx.scale(badge.logo!.scale, badge.logo!.scale);
+        ctx.drawImage(logoImg, 0, 0);
+        ctx.restore();
+      }
 
       // Convert to data URL
       try {
