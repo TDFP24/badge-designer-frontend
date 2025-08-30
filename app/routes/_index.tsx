@@ -2,7 +2,6 @@ import type { MetaFunction, LoaderFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import BadgeDesigner from "~/components/BadgeDesigner";
-import { ImageTest } from "~/components/ImageTest";
 
 export const meta: MetaFunction = () => {
   return [

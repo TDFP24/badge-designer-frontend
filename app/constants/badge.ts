@@ -3,8 +3,8 @@ import { DEFAULT_FONT } from './fonts';
 export const BADGE_CONSTANTS = {
   // Layout
   MAX_LINES: 4,
-  BADGE_WIDTH: 300,
-  BADGE_HEIGHT: 100,
+  BADGE_WIDTH: 288, // 3 inches at 96 DPI
+  BADGE_HEIGHT: 96,  // 1 inch at 96 DPI
   MIN_FONT_SIZE: 8,
   MAX_FONT_SIZE: 72,
   LINE_HEIGHT_MULTIPLIER: 1.3,

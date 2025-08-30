@@ -20,8 +20,15 @@ export const ImagePositioning: React.FC<ImagePositioningProps> = ({
   badgeLogo,
   badgeBackgroundImage
 }) => {
+  console.log('ImagePositioning props:', { image, type, badgeBackground, badgeLogo, badgeBackgroundImage });
   const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [scale, setScale] = useState(0.3); // Start smaller for better initial fit
+  const [scale, setScale] = useState(0.4); // Start with a reasonable size
+  const [hasInitialized, setHasInitialized] = useState(false); // Track if we've set initial position
+  
+  console.log('ImagePositioning state:', { position: JSON.stringify(position), scale, hasInitialized });
+  
+
+  
   const [isDragging, setIsDragging] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef({ x: 0, y: 0, startX: 0, startY: 0 });
@@ -34,6 +41,11 @@ export const ImagePositioning: React.FC<ImagePositioningProps> = ({
         backgroundSize: 'cover',
         backgroundPosition: 'center'
       };
+    } else if (badgeBackgroundImage) {
+      // If we have a positioned background image, render it properly
+      return {
+        background: 'transparent' // Let the positioned image show through
+      };
     }
     return {
       background: badgeBackground || '#f9fafb'
@@ -42,6 +54,7 @@ export const ImagePositioning: React.FC<ImagePositioningProps> = ({
 
   // Center the image initially when scale changes, but preserve existing position when repositioning
   useEffect(() => {
+    console.log('ImagePositioning useEffect triggered:', { type, image, badgeLogo, badgeBackgroundImage });
     const canvasWidth = 900;
     const canvasHeight = 300;
     
@@ -50,65 +63,51 @@ export const ImagePositioning: React.FC<ImagePositioningProps> = ({
     img.onload = () => {
       const naturalWidth = img.naturalWidth;
       const naturalHeight = img.naturalHeight;
+      console.log('Image loaded:', { naturalWidth, naturalHeight, type });
       
       // Calculate the scaled dimensions
       const scaledWidth = naturalWidth * scale;
       const scaledHeight = naturalHeight * scale;
       
-      // Only center if this is a new image (not repositioning)
+      // Check if we're repositioning an existing image
       if (type === 'logo' && badgeLogo && image === badgeLogo.src) {
-        // Keep existing position when repositioning - don't recenter on scale change
-        // Only set initial position once, not on every scale change
-        if (position.x === 0 && position.y === 0) {
-          // Convert from center coordinates back to top-left for the positioning canvas
-          const img = new Image();
-          img.onload = () => {
-            const naturalWidth = img.naturalWidth;
-            const naturalHeight = img.naturalHeight;
-            const scaledWidth = naturalWidth * (badgeLogo.scale * 3);
-            const scaledHeight = naturalHeight * (badgeLogo.scale * 3);
-            
-            setPosition({
-              x: (badgeLogo.x * 3),
-              y: (badgeLogo.y * 3)
-            });
-            setScale(badgeLogo.scale * 3);
-          };
-          img.src = image;
+        // Repositioning existing logo - use saved position
+        if (!hasInitialized) {
+          setPosition({
+            x: (badgeLogo.x * 3),
+            y: (badgeLogo.y * 3)
+          });
+          setScale(badgeLogo.scale * 3);
+          setHasInitialized(true);
         }
       } else if (type === 'background' && badgeBackgroundImage && image === badgeBackgroundImage.src) {
-        // Handle background repositioning
-        if (position.x === 0 && position.y === 0) {
-          // Convert from center coordinates back to top-left for the positioning canvas
-          const img = new Image();
-          img.onload = () => {
-            const naturalWidth = img.naturalWidth;
-            const naturalHeight = img.naturalHeight;
-            const scaledWidth = naturalWidth * (badgeBackgroundImage.scale * 3);
-            const scaledHeight = naturalHeight * (badgeBackgroundImage.scale * 3);
-            
-            setPosition({
-              x: (badgeBackgroundImage.x * 3),
-              y: (badgeBackgroundImage.y * 3)
-            });
-            setScale(badgeBackgroundImage.scale * 3);
-          };
-          img.src = image;
+        // Repositioning existing background - use saved position
+        if (!hasInitialized) {
+          setPosition({
+            x: (badgeBackgroundImage.x * 3),
+            y: (badgeBackgroundImage.y * 3)
+          });
+          setScale(badgeBackgroundImage.scale * 3);
+          setHasInitialized(true);
         }
       } else {
-        // True center positioning in the larger canvas for new images
-        // Since we're using transformOrigin: 'top left', we need to account for scaled dimensions
-        const centerX = (canvasWidth - scaledWidth) / 2;
-        const centerY = (canvasHeight - scaledHeight) / 2;
+        // New image - center it in the canvas
+        const centerX = Math.max(0, (canvasWidth - scaledWidth) / 2);
+        const centerY = Math.max(0, (canvasHeight - scaledHeight) / 2);
         
+        console.log('Setting new image position:', { centerX, centerY, scaledWidth, scaledHeight });
+        console.log('About to call setPosition with:', { x: centerX, y: centerY });
         setPosition({
           x: centerX,
           y: centerY
         });
+        console.log('setPosition called, now setting hasInitialized');
+        setHasInitialized(true);
+        console.log('hasInitialized set to true');
       }
     };
     img.src = image;
-  }, [image, type, badgeLogo]); // Removed 'scale' from dependencies
+  }, [image, type, badgeLogo, badgeBackgroundImage]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -215,14 +214,47 @@ export const ImagePositioning: React.FC<ImagePositioningProps> = ({
             height: 300,
             zIndex: 10
           }}>
+            {/* Render existing background image if positioning logo */}
+            {type === 'logo' && badgeBackgroundImage && (
+              <div
+                className="absolute"
+                style={{
+                  left: (badgeBackgroundImage.x * 3),
+                  top: (badgeBackgroundImage.y * 3),
+                  transform: `scale(${badgeBackgroundImage.scale * 3})`,
+                  transformOrigin: 'top left',
+                  zIndex: 1
+                }}
+              >
+                <img
+                  src={badgeBackgroundImage.src}
+                  alt="Background"
+                  style={{
+                    maxWidth: 'none',
+                    maxHeight: 'none',
+                    objectFit: 'contain',
+                    pointerEvents: 'none'
+                  }}
+                />
+              </div>
+            )}
             {/* Background image layer - positioned inside the cropping window */}
+            {console.log('Rendering draggable image:', { 
+              position: JSON.stringify(position), 
+              scale, 
+              image: image.substring(0, 50) + '...', 
+              type, 
+              hasInitialized,
+              renderedPosition: `left: ${position.x}px, top: ${position.y}px, scale: ${scale}`
+            })}
             <div
               className="absolute cursor-move select-none"
               style={{
                 left: position.x,
                 top: position.y,
                 transform: `scale(${scale})`,
-                transformOrigin: 'top left'
+                transformOrigin: 'top left',
+                zIndex: 20 // Logo should be above background
               }}
               onMouseDown={handleMouseDown}
             >
@@ -235,6 +267,8 @@ export const ImagePositioning: React.FC<ImagePositioningProps> = ({
                   objectFit: 'contain',
                   pointerEvents: 'none'
                 }}
+                onLoad={() => console.log('Draggable image loaded successfully')}
+                onError={(e) => console.error('Draggable image failed to load:', e)}
               />
             </div>
             

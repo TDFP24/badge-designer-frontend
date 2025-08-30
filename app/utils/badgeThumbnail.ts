@@ -21,8 +21,8 @@ export async function captureBadgePreviewSnapshot(badge: Badge): Promise<string>
         console.warn('Badge preview element not found, falling back to canvas generation');
         // Fallback to canvas generation
         generateBadgeThumbnail(badge, {
-          width: 300,
-          height: 100,
+          width: 288, // 3 inches at 96 DPI
+          height: 96,  // 1 inch at 96 DPI
           quality: 1.0,
           format: 'image/png'
         }).then(resolve).catch(reject);
@@ -431,8 +431,8 @@ export async function generateFullBadgeImage(badge: Badge): Promise<string> {
     // Fallback to high-resolution canvas generation
     console.log('Falling back to canvas generation...');
     const fullImage = await generateBadgeThumbnail(badge, {
-      width: 900,  // 3x preview width for crisp text
-      height: 300, // 3x preview height for crisp text
+      width: 864,  // 3x preview width (288 * 3) for crisp text
+      height: 288, // 3x preview height (96 * 3) for crisp text
       quality: 1.0, // Maximum quality
       format: 'image/png' // PNG for best quality
     });
@@ -498,8 +498,8 @@ export async function generateThumbnailFromFullImage(
 export async function generateCartThumbnail(badge: Badge): Promise<string> {
   try {
     const thumbnail = await generateBadgeThumbnail(badge, {
-      width: 150,
-      height: 50,
+      width: 144, // 1.5 inches at 96 DPI
+      height: 48,  // 0.5 inches at 96 DPI
       quality: 0.8,
       format: 'image/png' // Use PNG for better text clarity
     });
