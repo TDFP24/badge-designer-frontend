@@ -9,7 +9,7 @@ export interface BadgeThumbnailOptions {
 
 /**
  * Captures a snapshot of the actual BadgePreview component from the DOM
- * This ensures we get exactly what the user sees in the preview
+ * This ensures we get exactly what the user sees in the preview with high quality
  */
 export async function captureBadgePreviewSnapshot(badge: Badge): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -29,14 +29,15 @@ export async function captureBadgePreviewSnapshot(badge: Badge): Promise<string>
         return;
       }
 
+      console.log('Capturing badge preview snapshot at high resolution...');
+
       // Get the computed styles to ensure we capture the exact dimensions
       const computedStyle = window.getComputedStyle(badgePreviewElement);
-      const width = parseInt(computedStyle.width);
-      const height = parseInt(computedStyle.height);
+      const displayWidth = parseInt(computedStyle.width);
+      const displayHeight = parseInt(computedStyle.height);
 
-      console.log('Capturing badge preview snapshot:', { width, height });
-
-      // Create a canvas to capture the element
+      // Create high-resolution canvas (3x scale for crisp text)
+      const scale = 3;
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       
@@ -45,44 +46,57 @@ export async function captureBadgePreviewSnapshot(badge: Badge): Promise<string>
         return;
       }
 
-      // Set canvas dimensions to match the actual element
-      canvas.width = width;
-      canvas.height = height;
+      // Set canvas dimensions to high resolution
+      canvas.width = displayWidth * scale;
+      canvas.height = displayHeight * scale;
 
       // Enable high-quality rendering
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
 
-      // Use a more reliable approach - capture the element using html2canvas-like technique
-      // Create a temporary container to render the badge
-      const tempContainer = document.createElement('div');
-      tempContainer.style.position = 'absolute';
-      tempContainer.style.left = '-9999px';
-      tempContainer.style.top = '-9999px';
-      tempContainer.style.width = `${width}px`;
-      tempContainer.style.height = `${height}px`;
-      tempContainer.style.overflow = 'hidden';
-      
-      // Clone the badge preview element
-      const clonedElement = badgePreviewElement.cloneNode(true) as HTMLElement;
-      tempContainer.appendChild(clonedElement);
-      document.body.appendChild(tempContainer);
+      // Scale the context to match the high resolution
+      ctx.scale(scale, scale);
 
-      // Use html2canvas or similar library would be better here
-      // For now, we'll use a simple approach that recreates the badge exactly
-      // Fill background
+      // Fill background exactly as in preview
       ctx.fillStyle = badge.backgroundColor || '#FFFFFF';
-      ctx.fillRect(0, 0, width, height);
+      ctx.fillRect(0, 0, displayWidth, displayHeight);
 
-      // Add border
+      // Apply rounded corners exactly like BadgeDesigner (rounded class)
+      const borderRadius = 8; // rounded class = 8px
+      ctx.save();
+      ctx.beginPath();
+      
+      // Use quadratic curves for rounded corners (more compatible than roundRect)
+      ctx.moveTo(borderRadius, 0);
+      ctx.lineTo(displayWidth - borderRadius, 0);
+      ctx.quadraticCurveTo(displayWidth, 0, displayWidth, borderRadius);
+      ctx.lineTo(displayWidth, displayHeight - borderRadius);
+      ctx.quadraticCurveTo(displayWidth, displayHeight, displayWidth - borderRadius, displayHeight);
+      ctx.lineTo(borderRadius, displayHeight);
+      ctx.quadraticCurveTo(0, displayHeight, 0, displayHeight - borderRadius);
+      ctx.lineTo(0, borderRadius);
+      ctx.quadraticCurveTo(0, 0, borderRadius, 0);
+      ctx.closePath();
+      
+      ctx.clip();
+      
+      // Redraw background and border within rounded corners
+      ctx.fillStyle = badge.backgroundColor || '#FFFFFF';
+      ctx.fillRect(0, 0, displayWidth, displayHeight);
       ctx.strokeStyle = '#888';
       ctx.lineWidth = 2;
-      ctx.strokeRect(1, 1, width - 2, height - 2);
+      ctx.strokeRect(1, 1, displayWidth - 2, displayHeight - 2);
+      ctx.restore();
+
+      // Add border exactly as in preview
+      ctx.strokeStyle = '#888';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(1, 1, displayWidth - 2, displayHeight - 2);
 
       // Draw text exactly as it appears in the preview
-      const padding = Math.max(8, width * 0.04);
-      const availableWidth = width - (padding * 2);
-      const availableHeight = height - (padding * 2);
+      const padding = Math.max(8, displayWidth * 0.04);
+      const availableWidth = displayWidth - (padding * 2);
+      const availableHeight = displayHeight - (padding * 2);
 
       // Calculate total text height and positioning
       const totalTextHeight = badge.lines.reduce((sum, line) => {
@@ -95,7 +109,7 @@ export async function captureBadgePreviewSnapshot(badge: Badge): Promise<string>
       badge.lines.forEach((line: BadgeLine) => {
         const fontStyle = line.italic ? 'italic ' : '';
         const fontWeight = line.bold ? 'bold ' : '';
-        const fontSize = Math.min(line.size, height * 0.4);
+        const fontSize = Math.min(line.size, displayHeight * 0.4);
         
         // Use better font rendering with explicit font family
         const fontFamily = line.fontFamily || 'Arial';
@@ -115,10 +129,10 @@ export async function captureBadgePreviewSnapshot(badge: Badge): Promise<string>
             x = padding;
             break;
           case 'right':
-            x = width - padding;
+            x = displayWidth - padding;
             break;
           default: // center
-            x = width / 2;
+            x = displayWidth / 2;
             break;
         }
 
@@ -136,12 +150,16 @@ export async function captureBadgePreviewSnapshot(badge: Badge): Promise<string>
         currentY += fontSize * 1.3;
       });
 
-      // Clean up
-      document.body.removeChild(tempContainer);
+      console.log('High-resolution badge preview snapshot captured successfully, dimensions:', {
+        displayWidth,
+        displayHeight,
+        canvasWidth: canvas.width,
+        canvasHeight: canvas.height,
+        scale
+      });
 
-      // Convert to PNG data URL
+      // Convert to high-quality PNG data URL
       const pngDataUrl = canvas.toDataURL('image/png', 1.0);
-      console.log('Badge preview snapshot captured successfully');
       resolve(pngDataUrl);
 
     } catch (error) {

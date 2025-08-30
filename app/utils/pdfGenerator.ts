@@ -40,11 +40,9 @@ export const generatePDFNew = async (badgeData: Badge, multipleBadges?: Badge[])
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    // Simple layout: two horizontal rectangles side by side
+    // Dynamic layout based on actual badge dimensions
     const margin = 30;
-    const imageWidth = 300;  // Display size (will scale down from 900px)
-    const imageHeight = 100; // Display size (will scale down from 300px)
-    const tableX = margin + imageWidth + 20;
+    const tableX = margin + 350; // Reserve space for badge (will be adjusted dynamically)
     const tableWidth = 595.28 - tableX - margin;
     
     let y = 800; // Start from top
@@ -67,14 +65,44 @@ export const generatePDFNew = async (badgeData: Badge, multipleBadges?: Badge[])
       console.log('Image embedded in PDF');
       console.log('PDF image dimensions:', { width: pdfImage.width, height: pdfImage.height });
 
-      // Draw image on left side (fixed size, no scaling issues)
+      // Calculate display dimensions that maintain the exact aspect ratio from the captured image
+      // This ensures the badge appears with the correct proportions (wider than tall)
+      const maxDisplayWidth = 300; // Maximum width we want to reserve
+      const maxDisplayHeight = 120; // Maximum height we want to reserve
+      
+      // Calculate the scale factor to fit within our bounds while maintaining aspect ratio
+      const scaleX = maxDisplayWidth / pdfImage.width;
+      const scaleY = maxDisplayHeight / pdfImage.height;
+      const scale = Math.min(scaleX, scaleY);
+      
+      // Apply the scale to maintain exact aspect ratio
+      const displayWidth = pdfImage.width * scale;
+      const displayHeight = pdfImage.height * scale;
+      
+      console.log('Aspect ratio calculation:', {
+        originalWidth: pdfImage.width,
+        originalHeight: pdfImage.height,
+        originalAspectRatio: pdfImage.width / pdfImage.height,
+        scale,
+        displayWidth,
+        displayHeight,
+        displayAspectRatio: displayWidth / displayHeight
+      });
+
+      console.log('Display dimensions with maintained aspect ratio:', { displayWidth, displayHeight, originalWidth: pdfImage.width, originalHeight: pdfImage.height });
+
+      // Draw image at the target display size (maintains aspect ratio and quality)
       page.drawImage(pdfImage, {
         x: margin,
-        y: y - imageHeight,
-        width: imageWidth,
-        height: imageHeight,
+        y: y - displayHeight,
+        width: displayWidth,
+        height: displayHeight,
       });
-      console.log('Image drawn at:', { x: margin, y: y - imageHeight, width: imageWidth, height: imageHeight });
+      console.log('Image drawn at target size:', { x: margin, y: y - displayHeight, width: displayWidth, height: displayHeight });
+
+      // Use fixed table position for consistent layout
+      const actualTableX = margin + displayWidth + 20;
+      const actualTableWidth = 595.28 - actualTableX - margin;
 
       // Draw badge title (smaller, left-justified)
       page.drawText(`Badge ${idx + 1}`, {
@@ -90,7 +118,7 @@ export const generatePDFNew = async (badgeData: Badge, multipleBadges?: Badge[])
       const colorInfo = getColorInfo(hex) || { name: 'Custom', hex };
       page.drawText(`Background: ${colorInfo.name} (${hex})`, {
         x: margin,
-        y: y - imageHeight - 10,
+        y: y - displayHeight - 10,
         size: 9,
         font,
         color: rgb(0, 0, 0),
@@ -118,9 +146,9 @@ export const generatePDFNew = async (badgeData: Badge, multipleBadges?: Badge[])
 
         const rowY = tableY - (rowIdx + 1) * rowHeight;
         page.drawRectangle({
-          x: tableX,
+          x: actualTableX,
           y: rowY,
-          width: tableWidth,
+          width: actualTableWidth,
           height: rowHeight,
           color: rowIdx % 2 === 0 ? rgb(1, 1, 1) : rgb(0.95, 0.95, 0.95),
           borderColor: rgb(0, 0, 0),
@@ -128,7 +156,7 @@ export const generatePDFNew = async (badgeData: Badge, multipleBadges?: Badge[])
         });
 
         page.drawText(`Line ${lineIdx + 1}: "${cleanText}"`, {
-          x: tableX + 5,
+          x: actualTableX + 5,
           y: rowY + 4,
           size: 8,
           font,
@@ -139,16 +167,16 @@ export const generatePDFNew = async (badgeData: Badge, multipleBadges?: Badge[])
         // Font details
         const fontRowY = tableY - (rowIdx + 1) * rowHeight;
         page.drawRectangle({
-          x: tableX,
+          x: actualTableX,
           y: fontRowY,
-          width: tableWidth,
+          width: actualTableWidth,
           height: rowHeight,
           color: rowIdx % 2 === 0 ? rgb(1, 1, 1) : rgb(0.95, 0.95, 0.95),
           borderColor: rgb(0, 0, 0),
           borderWidth: 0.5,
         });
         page.drawText(`Font: ${fontName} ${fontSize}pt (${styleText})`, {
-          x: tableX + 5,
+          x: actualTableX + 5,
           y: fontRowY + 4,
           size: 8,
           font,
@@ -159,16 +187,16 @@ export const generatePDFNew = async (badgeData: Badge, multipleBadges?: Badge[])
         // Color details
         const colorRowY = tableY - (rowIdx + 1) * rowHeight;
         page.drawRectangle({
-          x: tableX,
+          x: actualTableX,
           y: colorRowY,
-          width: tableWidth,
+          width: actualTableWidth,
           height: rowHeight,
           color: rowIdx % 2 === 0 ? rgb(1, 1, 1) : rgb(0.95, 0.95, 0.95),
           borderColor: rgb(0, 0, 0),
           borderWidth: 0.5,
         });
         page.drawText(`Color: ${textColor}`, {
-          x: tableX + 5,
+          x: actualTableX + 5,
           y: colorRowY + 4,
           size: 8,
           font,
@@ -179,16 +207,16 @@ export const generatePDFNew = async (badgeData: Badge, multipleBadges?: Badge[])
         // Alignment details
         const alignRowY = tableY - (rowIdx + 1) * rowHeight;
         page.drawRectangle({
-          x: tableX,
+          x: actualTableX,
           y: alignRowY,
-          width: tableWidth,
+          width: actualTableWidth,
           height: rowHeight,
           color: rowIdx % 2 === 0 ? rgb(1, 1, 1) : rgb(0.95, 0.95, 0.95),
           borderColor: rgb(0, 0, 0),
           borderWidth: 0.5,
         });
         page.drawText(`Alignment: ${alignText}`, {
-          x: tableX + 5,
+          x: actualTableX + 5,
           y: alignRowY + 4,
           size: 8,
           font,
@@ -200,7 +228,7 @@ export const generatePDFNew = async (badgeData: Badge, multipleBadges?: Badge[])
       // Move to next badge
       const totalRows = badge.lines.length * 4; // 4 rows per text line
       const tableHeight = totalRows * rowHeight;
-      const sectionHeight = Math.max(imageHeight + 20, tableHeight + 20);
+      const sectionHeight = Math.max(displayHeight + 20, tableHeight + 20);
       y -= sectionHeight;
       
     }

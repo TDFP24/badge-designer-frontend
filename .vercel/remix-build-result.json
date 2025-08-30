@@ -10,18 +10,18 @@
       }
     },
     "routeIdToServerBundleId": {
+      "routes/api.supabase-update-badge": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/api.test-endpoints": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/api.badge-designs": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
-      "routes/deployment-test": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/api.gadget-health": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/api.supabase-test": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/api.update-badge": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/api.upload-image": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/api.add-to-cart": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/api.save-badge": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/api.test-save": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
-      "routes/working-test": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
-      "routes/iframe-test": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
-      "routes/static-test": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
-      "routes/test-route": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/api.test": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
-      "routes/simple": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
-      "routes/_index": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
-      "routes/test": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0"
+      "routes/_index": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0"
     },
     "routes": {
       "root": {
@@ -29,6 +29,15 @@
         "id": "root",
         "file": "app/root.tsx",
         "config": {}
+      },
+      "routes/api.supabase-update-badge": {
+        "file": "app/routes/api.supabase-update-badge.tsx",
+        "id": "routes/api.supabase-update-badge",
+        "path": "api/supabase-update-badge",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
       },
       "routes/api.test-endpoints": {
         "file": "app/routes/api.test-endpoints.tsx",
@@ -48,10 +57,55 @@
           "runtime": "nodejs"
         }
       },
-      "routes/deployment-test": {
-        "file": "app/routes/deployment-test.tsx",
-        "id": "routes/deployment-test",
-        "path": "deployment-test",
+      "routes/api.gadget-health": {
+        "file": "app/routes/api.gadget-health.tsx",
+        "id": "routes/api.gadget-health",
+        "path": "api/gadget-health",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/api.supabase-test": {
+        "file": "app/routes/api.supabase-test.tsx",
+        "id": "routes/api.supabase-test",
+        "path": "api/supabase-test",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/api.update-badge": {
+        "file": "app/routes/api.update-badge.tsx",
+        "id": "routes/api.update-badge",
+        "path": "api/update-badge",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/api.upload-image": {
+        "file": "app/routes/api.upload-image.tsx",
+        "id": "routes/api.upload-image",
+        "path": "api/upload-image",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/api.add-to-cart": {
+        "file": "app/routes/api.add-to-cart.tsx",
+        "id": "routes/api.add-to-cart",
+        "path": "api/add-to-cart",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/api.save-badge": {
+        "file": "app/routes/api.save-badge.tsx",
+        "id": "routes/api.save-badge",
+        "path": "api/save-badge",
         "parentId": "root",
         "config": {
           "runtime": "nodejs"
@@ -66,55 +120,10 @@
           "runtime": "nodejs"
         }
       },
-      "routes/working-test": {
-        "file": "app/routes/working-test.tsx",
-        "id": "routes/working-test",
-        "path": "working-test",
-        "parentId": "root",
-        "config": {
-          "runtime": "nodejs"
-        }
-      },
-      "routes/iframe-test": {
-        "file": "app/routes/iframe-test.tsx",
-        "id": "routes/iframe-test",
-        "path": "iframe-test",
-        "parentId": "root",
-        "config": {
-          "runtime": "nodejs"
-        }
-      },
-      "routes/static-test": {
-        "file": "app/routes/static-test.tsx",
-        "id": "routes/static-test",
-        "path": "static-test",
-        "parentId": "root",
-        "config": {
-          "runtime": "nodejs"
-        }
-      },
-      "routes/test-route": {
-        "file": "app/routes/test-route.tsx",
-        "id": "routes/test-route",
-        "path": "test-route",
-        "parentId": "root",
-        "config": {
-          "runtime": "nodejs"
-        }
-      },
       "routes/api.test": {
         "file": "app/routes/api.test.tsx",
         "id": "routes/api.test",
         "path": "api/test",
-        "parentId": "root",
-        "config": {
-          "runtime": "nodejs"
-        }
-      },
-      "routes/simple": {
-        "file": "app/routes/simple.tsx",
-        "id": "routes/simple",
-        "path": "simple",
         "parentId": "root",
         "config": {
           "runtime": "nodejs"
@@ -128,22 +137,13 @@
         "config": {
           "runtime": "nodejs"
         }
-      },
-      "routes/test": {
-        "file": "app/routes/test.tsx",
-        "id": "routes/test",
-        "path": "test",
-        "parentId": "root",
-        "config": {
-          "runtime": "nodejs"
-        }
       }
     }
   },
   "remixConfig": {
-    "appDirectory": "C:\\Users\\james\\Badgetool Main_Local_ts- remix - shopify2 - iframe_pdf - vscode\\badge-designer-frontend\\app",
+    "appDirectory": "C:\\Users\\Tom_P\\OneDrive\\Documents\\PSS\\2025 - Coding Projects\\Badge Tool\\badge-designer-frontend\\app",
     "basename": "/",
-    "buildDirectory": "C:\\Users\\james\\Badgetool Main_Local_ts- remix - shopify2 - iframe_pdf - vscode\\badge-designer-frontend\\build",
+    "buildDirectory": "C:\\Users\\Tom_P\\OneDrive\\Documents\\PSS\\2025 - Coding Projects\\Badge Tool\\badge-designer-frontend\\build",
     "future": {
       "v3_fetcherPersist": true,
       "v3_relativeSplatPath": true,
@@ -161,6 +161,12 @@
         "id": "root",
         "file": "root.tsx"
       },
+      "routes/api.supabase-update-badge": {
+        "file": "routes/api.supabase-update-badge.tsx",
+        "id": "routes/api.supabase-update-badge",
+        "path": "api/supabase-update-badge",
+        "parentId": "root"
+      },
       "routes/api.test-endpoints": {
         "file": "routes/api.test-endpoints.tsx",
         "id": "routes/api.test-endpoints",
@@ -173,10 +179,40 @@
         "path": "api/badge-designs",
         "parentId": "root"
       },
-      "routes/deployment-test": {
-        "file": "routes/deployment-test.tsx",
-        "id": "routes/deployment-test",
-        "path": "deployment-test",
+      "routes/api.gadget-health": {
+        "file": "routes/api.gadget-health.tsx",
+        "id": "routes/api.gadget-health",
+        "path": "api/gadget-health",
+        "parentId": "root"
+      },
+      "routes/api.supabase-test": {
+        "file": "routes/api.supabase-test.tsx",
+        "id": "routes/api.supabase-test",
+        "path": "api/supabase-test",
+        "parentId": "root"
+      },
+      "routes/api.update-badge": {
+        "file": "routes/api.update-badge.tsx",
+        "id": "routes/api.update-badge",
+        "path": "api/update-badge",
+        "parentId": "root"
+      },
+      "routes/api.upload-image": {
+        "file": "routes/api.upload-image.tsx",
+        "id": "routes/api.upload-image",
+        "path": "api/upload-image",
+        "parentId": "root"
+      },
+      "routes/api.add-to-cart": {
+        "file": "routes/api.add-to-cart.tsx",
+        "id": "routes/api.add-to-cart",
+        "path": "api/add-to-cart",
+        "parentId": "root"
+      },
+      "routes/api.save-badge": {
+        "file": "routes/api.save-badge.tsx",
+        "id": "routes/api.save-badge",
+        "path": "api/save-badge",
         "parentId": "root"
       },
       "routes/api.test-save": {
@@ -185,52 +221,16 @@
         "path": "api/test-save",
         "parentId": "root"
       },
-      "routes/working-test": {
-        "file": "routes/working-test.tsx",
-        "id": "routes/working-test",
-        "path": "working-test",
-        "parentId": "root"
-      },
-      "routes/iframe-test": {
-        "file": "routes/iframe-test.tsx",
-        "id": "routes/iframe-test",
-        "path": "iframe-test",
-        "parentId": "root"
-      },
-      "routes/static-test": {
-        "file": "routes/static-test.tsx",
-        "id": "routes/static-test",
-        "path": "static-test",
-        "parentId": "root"
-      },
-      "routes/test-route": {
-        "file": "routes/test-route.tsx",
-        "id": "routes/test-route",
-        "path": "test-route",
-        "parentId": "root"
-      },
       "routes/api.test": {
         "file": "routes/api.test.tsx",
         "id": "routes/api.test",
         "path": "api/test",
         "parentId": "root"
       },
-      "routes/simple": {
-        "file": "routes/simple.tsx",
-        "id": "routes/simple",
-        "path": "simple",
-        "parentId": "root"
-      },
       "routes/_index": {
         "file": "routes/_index.tsx",
         "id": "routes/_index",
         "index": true,
-        "parentId": "root"
-      },
-      "routes/test": {
-        "file": "routes/test.tsx",
-        "id": "routes/test",
-        "path": "test",
         "parentId": "root"
       }
     },
