@@ -1,148 +1,120 @@
-import type { Badge, BadgeImage } from "../types/badge";
+import type { Badge, Template, TemplateMaskPath } from "../types/badge";
 
-type TemplateMask =
-  | { type: "rect"; rx?: number; ry?: number }
-  | { type: "oval" };
+function esc(s: string) {
+  return s.replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]!));
+}
 
-type Template = {
-  id: string;
-  name: string;
-  artboardWidth?: number;
-  artboardHeight?: number;
-  safeInset?: number;
-  mask?: TemplateMask;
-  // Legacy keys support
-  artboard_width?: number;
-  artboard_height?: number;
-  safe_inset?: number;
-};
-
-const num = (v: any, d = 0) => (Number.isFinite(v) ? Number(v) : d);
-
-function maskElement(template: Template, w: number, h: number) {
-  const m = template.mask ?? { type: "rect", rx: 0, ry: 0 };
-  if (m.type === "oval") {
-    return `<ellipse cx="${w / 2}" cy="${h / 2}" rx="${w / 2}" ry="${h / 2}" />`;
+export function renderBadgeToSvgString(badge: Badge, template: Template): string {
+  if (!template || !template.artboardWidth || !template.artboardHeight) {
+    throw new Error("Invalid template");
   }
-  const rx = num(m.rx, 0);
-  const ry = num(m.ry, rx);
-  return `<rect x="0" y="0" width="${w}" height="${h}" rx="${rx}" ry="${ry}" />`;
-}
 
-function outlineElement(template: Template, w: number, h: number) {
-  const m = template.mask ?? { type: "rect", rx: 0, ry: 0 };
-  if (m.type === "oval") {
-    return `<ellipse cx="${w / 2}" cy="${h / 2}" rx="${w / 2}" ry="${h / 2}" fill="none" stroke="#888" stroke-width="2" />`;
+  const W = template.artboardWidth;
+  const H = template.artboardHeight;
+  // Ensure we have a numeric safe inset
+  const safe = typeof template.safeInset === 'number' ? template.safeInset : 0;
+
+  // Inner drawable area (we clip all user content to the mask, but we also use the safe box to position the path nicely)
+  const innerX = safe;
+  const innerY = safe;
+  const innerW = W - safe * 2;
+  const innerH = H - safe * 2;
+
+  // Build mask shape
+  let maskBody = "";
+  if (template.mask.type === "rect") {
+    const rx = template.mask.rx ?? 0;
+    const ry = template.mask.ry ?? rx;
+    maskBody = `<rect x="0" y="0" width="${W}" height="${H}" rx="${rx}" ry="${ry}" />`;
+  } else {
+    const mp = template.mask as TemplateMaskPath;
+    const [vbX, vbY, vbW, vbH] = mp.sourceViewBox;
+    const scale = Math.min(innerW / vbW, innerH / vbH);
+    const tx = innerX + (innerW - vbW * scale) / 2 - vbX * scale;
+    const ty = innerY + (innerH - vbH * scale) / 2 - vbY * scale;
+
+    // Explicit fill + evenodd rule to ensure the clip region is recognized in all browsers
+    maskBody = `<g transform="translate(${tx},${ty}) scale(${scale})">
+      <path d="${mp.d}" fill="black" clip-rule="evenodd"/>
+    </g>`;
   }
-  const rx = num(m.rx, 0);
-  const ry = num(m.ry, rx);
-  return `<rect x="1" y="1" width="${w - 2}" height="${h - 2}" rx="${rx}" ry="${ry}" fill="none" stroke="#888" stroke-width="2" />`;
-}
 
-function positionedImage(img: BadgeImage) {
-  const x = num(img.x, 0);
-  const y = num(img.y, 0);
-  const s = num(img.scale, 1);
-  // Note: we don't set width/height here; we rely on the image's intrinsic size,
-  // letting scale handle size. This avoids stretching outside the clip.
-  return `
-    <g transform="translate(${x}, ${y}) scale(${s})">
-      <image href="${img.src}" x="0" y="0" preserveAspectRatio="xMidYMid meet" />
-    </g>
-  `;
-}
+  // ClipPath id
+  const clipId = `clip_${Math.random().toString(36).slice(2)}`;
+  const cutId  = `cut_${Math.random().toString(36).slice(2)}`;
 
-export function renderBadgeToSvgString(badge: Badge, template?: Template) {
-  const w = num(template?.artboardWidth ?? template?.artboard_width, 300);
-  const h = num(template?.artboardHeight ?? template?.artboard_height, 100);
-  const inset = num(template?.safeInset ?? template?.safe_inset, 6);
-
-  const clipId = `clip-${template?.id ?? "fallback"}`;
+  // Background color (under everything, but still clipped)
   const bgColor = badge.backgroundColor || "#FFFFFF";
 
-  // Layers INSIDE clip
-  const bgColorLayer = `<rect width="${w}" height="${h}" fill="${bgColor}" />`;
+  // Images (optional)
+  const bgImg = badge.backgroundImage;
+  const logo  = badge.logo;
 
-  let bgImageLayer = "";
-  if (badge.backgroundImage) {
-    if (typeof badge.backgroundImage === "string") {
-      // Full-bleed but clipped by mask
-      bgImageLayer = `<image href="${badge.backgroundImage}" x="0" y="0" width="${w}" height="${h}" preserveAspectRatio="xMidYMid slice" />`;
-    } else {
-      bgImageLayer = positionedImage(badge.backgroundImage);
-    }
+  // Helper: image tag (clipped)
+  const imageTag = (img?: {src:string, x:number, y:number, scale:number}) => {
+    if (!img) return "";
+    // We draw images in badge coordinate space (artboard px) so x/y/scale are applied directly
+    // Using preserveAspectRatio="none" because the user controls scale.
+    return `<image href="${esc(img.src)}" x="${img.x}" y="${img.y}" transform="scale(${img.scale})" width="${W}" height="${H}" preserveAspectRatio="none" />`;
+  };
+
+  // Text lines (clipped)
+  const lineHeightMult = 1.3;
+  const totalTextHeight = badge.lines.reduce((acc, l) => acc + l.size * lineHeightMult, 0);
+  let yCursor = H / 2 - totalTextHeight / 2;
+
+  const textNodes = badge.lines.map((l) => {
+    const anchor = l.alignment === "left" ? "start" : l.alignment === "right" ? "end" : "middle";
+    const xPos = l.alignment === "left" ? safe + 8 : l.alignment === "right" ? W - safe - 8 : W / 2;
+    const fontW = `${l.bold ? "bold " : ""}${l.italic ? "italic " : ""}${l.size}px ${esc(l.fontFamily || "Arial")}`;
+    const out = `<text x="${xPos}" y="${yCursor + l.size}" text-anchor="${anchor}" fill="${esc(l.color)}" font="${esc(fontW)}">${esc(l.text)}</text>`;
+    yCursor += l.size * lineHeightMult;
+    return out;
+  }).join("");
+
+  // Cutline (top overlay) uses the same geometry as the mask (no scaling stroke)
+  let cutBody = "";
+  if (template.mask.type === "rect") {
+    const rx = template.mask.rx ?? 0;
+    const ry = template.mask.ry ?? rx;
+    cutBody = `<rect x="0" y="0" width="${W}" height="${H}" rx="${rx}" ry="${ry}" 
+      fill="none" stroke="#c14646" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
+  } else {
+    const mp = template.mask as TemplateMaskPath;
+    const [vbX, vbY, vbW, vbH] = mp.sourceViewBox;
+    const scale = Math.min(innerW / vbW, innerH / vbH);
+    const tx = innerX + (innerW - vbW * scale) / 2 - vbX * scale;
+    const ty = innerY + (innerH - vbH * scale) / 2 - vbY * scale;
+    cutBody = `<g transform="translate(${tx},${ty}) scale(${scale})">
+      <path d="${mp.d}" fill="none" stroke="#c14646" stroke-width="2" vector-effect="non-scaling-stroke"/>
+    </g>`;
   }
 
-  let logoLayer = "";
-  if (badge.logo) {
-    logoLayer = positionedImage(badge.logo);
-  }
+  // Safe guide (dashed rectangle) — visual aid only
+  const safeGuide = `<rect x="${innerX}" y="${innerY}" width="${innerW}" height="${innerH}" fill="none" stroke="#e9b7b7" stroke-dasharray="6 6" />`;
 
-  const lines = badge.lines ?? [];
-  const lh = 1.3;
-  const totalH = lines.reduce((s, l) => s + num(l.size, 14) * lh, 0);
-  let cursorY = (h - totalH) / 2 + num(lines[0]?.size, 14);
-
-  const textLayers = lines
-    .map((l) => {
-      const size = num(l.size, 14);
-      const color = l.color || "#000";
-      const weight = l.bold ? "bold" : "normal";
-      const style = l.italic ? "italic" : "normal";
-      const deco = l.underline ? "underline" : "none";
-      const family = l.fontFamily || "Arial";
-      const align = l.alignment === "left" || l.alignment === "right" ? l.alignment : "center";
-
-      let x = w / 2;
-      let anchor = "middle";
-      if (align === "left") {
-        x = inset;
-        anchor = "start";
-      } else if (align === "right") {
-        x = w - inset;
-        anchor = "end";
-      }
-
-      const el = `
-        <text
-          x="${x}" y="${cursorY}"
-          fill="${color}"
-          font-size="${size}"
-          font-weight="${weight}"
-          font-style="${style}"
-          text-decoration="${deco}"
-          font-family="${family}"
-          text-anchor="${anchor}"
-          dominant-baseline="alphabetic"
-        >${escapeXml(l.text || "")}</text>
-      `;
-      cursorY += size * lh;
-      return el;
-    })
-    .join("");
-
+  // Assemble
   return `
-<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <defs>
-    <clipPath id="${clipId}">
-      ${maskElement(template ?? { id: "fallback", name: "fallback" }, w, h)}
+    <clipPath id="${clipId}" clipPathUnits="userSpaceOnUse">
+      ${maskBody}
     </clipPath>
+    <mask id="${cutId}">
+      <rect x="0" y="0" width="${W}" height="${H}" fill="white"/>
+    </mask>
   </defs>
 
-  <!-- Everything below is clipped to shape -->
+  <!-- clipped content -->
   <g clip-path="url(#${clipId})">
-    ${bgColorLayer}
-    ${bgImageLayer}
-    ${logoLayer}
-    ${textLayers}
+    <rect x="0" y="0" width="${W}" height="${H}" fill="${esc(bgColor)}"/>
+    ${imageTag(bgImg)}
+    ${imageTag(logo)}
+    ${textNodes}
   </g>
 
-  <!-- Outline always on top -->
-  ${outlineElement(template ?? { id: "fallback", name: "fallback" }, w, h)}
-</svg>
-  `;
-}
-
-function escapeXml(s: string) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  <!-- overlays -->
+  ${safe > 0 ? safeGuide : ""}
+  ${cutBody}
+</svg>`.trim();
 }

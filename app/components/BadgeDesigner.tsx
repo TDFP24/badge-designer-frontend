@@ -23,10 +23,10 @@ import { BADGE_CONSTANTS } from '../constants/badge';
 import { generateFullBadgeImage, generateThumbnailFromFullImage } from '../utils/badgeThumbnail';
 import { getCurrentShop, saveBadgeDesign, ShopAuthData } from '../utils/shopAuth';
 import { createApi } from '../utils/api';
-import { getTemplates, getTemplateById } from '../../src/utils/templates';
-import BadgeSvgRenderer from '../../src/components/BadgeSvgRenderer';
+import { getTemplates, getTemplateById, type Template } from '../../src/utils/templates';
+import { BadgeSvgRenderer } from '../../src/components/BadgeSvgRenderer';
 import { ImageControls } from '../../src/components/ImageControls';
-import { downloadSvg, downloadPng, downloadTiff, downloadPdf, downloadCdr } from '../../src/utils/export';
+import { downloadSVG, downloadPNG, downloadCDR, downloadPDF, downloadTIFF } from '../utils/export';
 import { renderBadgeToSvgString } from '../../src/utils/renderSvg';
 import { INITIAL_BADGE } from '../../src/constants/badge';
 
@@ -64,7 +64,21 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
 
   const LINE_HEIGHT_MULTIPLIER = 1.3;
   const [badge, setBadge] = useState<Badge>(INITIAL_BADGE);
-  const [templates, setTemplates] = useState<{id:string; name:string}[]>([]);
+  const [templates, setTemplates] = useState<ReturnType<typeof getTemplates>>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState<string>("rect-1x3");
+  const [debug, setDebug] = useState(false);
+  
+  // Simple luminance-based contrast helper (for solid fills)
+  // If a background image is used, we default to white for safety.
+  const ensureReadableTextOnImage = (b = badge) => {
+    // If there's a background image, prefer white text for all lines unless user already chose white.
+    if (b.backgroundImage) {
+      const newLines = b.lines.map((ln) =>
+        ln.color.toLowerCase() === "#ffffff" ? ln : { ...ln, color: "#ffffff" as const }
+      );
+      setBadge({ ...b, lines: newLines });
+    }
+  };
   const [showCsvModal, setShowCsvModal] = useState(false);
   const [csvText, setCsvText] = useState('');
   const [csvPreview, setCsvPreview] = useState<string[][]>([]);
@@ -76,9 +90,42 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
 
   // Load templates on component mount
   useEffect(() => {
-    const templateList = getTemplates();
-    setTemplates(templateList.map(t => ({ id: t.id, name: t.name })));
+    const list = getTemplates();
+    setTemplates(list);
+    // eslint-disable-next-line no-console
+    console.log("[BadgeDesigner] templates loaded:", list.map(t => t.id));
+    if (list.length && !list.find(t => t.id === selectedTemplate)) {
+      setSelectedTemplate(list[0].id);
+    }
   }, []);
+
+  // whenever dropdown changes, log it
+  useEffect(() => {
+    // eslint-disable-next-line no-console
+    console.log("[BadgeDesigner] template selected:", selectedTemplate);
+  }, [selectedTemplate]);
+
+  const template = getTemplateById(selectedTemplate);
+
+  // Auto-enable white text when a background image exists
+  useEffect(() => {
+    const hasBgImage =
+      typeof badge.backgroundImage === "string"
+        ? !!badge.backgroundImage
+        : !!badge.backgroundImage?.src;
+
+    if (hasBgImage) {
+      // ensure white is available or auto-switch the default line to white for visibility
+      setBadge((prev) => ({
+        ...prev,
+        lines: prev.lines.map((l, i) =>
+          i === 0 && (!l.color || l.color.toLowerCase() === "#000000")
+            ? { ...l, color: "#FFFFFF" }
+            : l
+        ),
+      }));
+    }
+  }, [badge.backgroundImage]);
 
   // Helper to estimate text width for a given font size and string
   const measureTextWidth = (text: string, fontSize: number, fontFamily: string, bold: boolean, italic: boolean) => {
@@ -200,6 +247,7 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
       ...badge,
       [type]: undefined,
     });
+    // no auto-contrast needed here; user can adjust text color back if desired
   };
 
   // Helper function for server-side export
@@ -773,15 +821,25 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
           
           {/* Template Selector */}
           <div className="mb-4">
-            <label className="block text-sm font-semibold mb-1">Shape / Template</label>
+            <div className="flex items-center gap-3">
+              <label className="block text-sm font-semibold mb-1">Shape / Template</label>
+              <label className="inline-flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={debug} onChange={(e) => setDebug(e.target.checked)} />
+                Debug
+              </label>
+            </div>
             <select
               className="border rounded px-2 py-1 text-sm bg-white"
-              value={badge.templateId}
-              onChange={(e) => setBadge({ ...badge, templateId: e.target.value })}
+              value={selectedTemplate}
+              onChange={(e) => setSelectedTemplate(e.target.value)}
             >
-              {templates.map(t => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
+              {templates.length === 0 ? (
+                <option value="rect-1x3">Loading templates...</option>
+              ) : (
+                templates.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))
+              )}
             </select>
             {/* debug removed */}
           </div>
@@ -790,11 +848,36 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
           <div className="mb-4">
             <h3 className="font-semibold text-gray-700 mb-2">Export Options</h3>
             <div className="mt-4 flex flex-wrap gap-2">
-              <button className="control-button px-3 py-2" onClick={() => downloadSvg(badge)}>Download SVG</button>
-              <button className="control-button px-3 py-2" onClick={() => downloadPng(badge, 2)}>Download PNG</button>
-              <button className="control-button px-3 py-2" onClick={() => downloadCdr(badge)}>Download CDR (SVG)</button>
-              <button className="control-button px-3 py-2" onClick={() => downloadTiff(badge)}>Download TIFF</button>
-              <button className="control-button px-3 py-2" onClick={() => downloadPdf(badge)}>Download PDF</button>
+              <button className="px-3 py-2 border rounded" onClick={async () => {
+                const template = await getTemplateById(badge.templateId);
+                downloadSVG(badge, template as Template, "badge.svg");
+              }}>
+                Download SVG
+              </button>
+              <button className="px-3 py-2 border rounded" onClick={async () => {
+                const template = await getTemplateById(badge.templateId);
+                downloadPNG(badge, template as Template, "badge.png", 2);
+              }}>
+                Download PNG (2×)
+              </button>
+              <button className="px-3 py-2 border rounded" onClick={async () => {
+                const template = await getTemplateById(badge.templateId);
+                downloadCDR(badge, template as Template, "badge.cdr");
+              }}>
+                Download CDR (SVG)
+              </button>
+              <button className="px-3 py-2 border rounded" onClick={async () => {
+                const template = await getTemplateById(badge.templateId);
+                downloadPDF(badge, template as Template, "badge.pdf", 3);
+              }}>
+                Download PDF
+              </button>
+              <button className="px-3 py-2 border rounded" onClick={async () => {
+                const template = await getTemplateById(badge.templateId);
+                downloadTIFF(badge, template as Template, "badge.tiff", 4);
+              }}>
+                Download TIFF (placeholder)
+              </button>
             </div>
           </div>
           
@@ -820,8 +903,18 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
               >More colors…</button>
             </div>
             {/* Preview Box */}
-            <BadgeSvgRenderer badge={badge} />
+            <BadgeSvgRenderer badge={badge} template={template} debug={debug} />
           </div>
+
+          {/* Debug state display */}
+          {debug && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-sm">Badge State</summary>
+              <pre className="bg-gray-100 p-2 rounded text-xs overflow-auto">
+                {JSON.stringify({ selectedTemplate, badge }, null, 2)}
+              </pre>
+            </details>
+          )}
 
           {/* Image Controls */}
           <div className="mb-6">
@@ -902,7 +995,7 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
                     if (file) {
                       try {
                         const imageData = await handleImageUpload(file, 'backgroundImage');
-                        setBadge({
+                        const updatedBadge = {
                           ...badge,
                           backgroundImage: {
                             src: imageData,
@@ -910,7 +1003,10 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
                             y: 0,
                             scale: 1.0,
                           },
-                        });
+                        };
+                        setBadge(updatedBadge);
+                        // When background image is added, set better text colors for readability
+                        ensureReadableTextOnImage(updatedBadge);
                       } catch (error) {
                         console.error('Failed to upload background image:', error);
                         alert('Failed to upload image. Please try again.');
@@ -1099,7 +1195,7 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
                 </div>
                 {/* Main preview box */}
                 <div className="flex flex-col items-center w-full max-w-[300px]">
-                  <BadgeSvgRenderer badge={badge} />
+                  <BadgeSvgRenderer badge={badge} template={template} debug={debug} />
                 </div>
               </div>
               {/* Multiple badge previews below, each with edit/delete and number */}
@@ -1119,7 +1215,7 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
                     </div>
                     {/* Preview box */}
                     <div className="flex flex-col items-center w-full max-w-[300px]">
-                      <BadgeSvgRenderer badge={b} />
+                      <BadgeSvgRenderer badge={b} template={template} debug={debug} />
                     </div>
                   </div>
                   {/* Edit Modal UI */}
@@ -1156,7 +1252,7 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
                                   </div>
                                 </div>
                                 {/* Live Preview */}
-                                <BadgeSvgRenderer badge={badgeToEdit} />
+                                <BadgeSvgRenderer badge={badgeToEdit} template={template} debug={debug} />
                               </div>
                               {/* Editable Lines */}
                               <div className="flex flex-col gap-6 w-full max-w-2xl">

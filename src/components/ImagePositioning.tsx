@@ -114,13 +114,12 @@ const ImagePositioning: React.FC<ImagePositioningProps> = ({
   };
 
   // Wheel zoom (zoom to cursor) — attach to same overlay
-  const overlayRef = useRef<HTMLDivElement>(null);
-  const imgRef = useRef<HTMLImageElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
 
   const onWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const factor = Math.exp(-e.deltaY * 0.0015);
-    const rect = overlayRef.current?.getBoundingClientRect();
+    const rect = svgRef.current?.getBoundingClientRect();
     if (!rect) return;
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
@@ -183,17 +182,23 @@ const ImagePositioning: React.FC<ImagePositioningProps> = ({
           className="relative mx-auto border border-gray-300 bg-white"
           style={{ width: UI_W, height: UI_H }}
         >
-          {/* Visible stencil with clip-path */}
+          {/* All layers live in one SVG so clipPath + z-index are predictable */}
           <svg
+            ref={svgRef}
             width={UI_W}
             height={UI_H}
-            className="absolute inset-0"
-            style={{ pointerEvents: "none" }}
+            viewBox={`0 0 ${UI_W} ${UI_H}`}
+            className="block"
           >
             <defs>
               <clipPath id={clipId} clipPathUnits="userSpaceOnUse">
                 {template.mask?.type === "oval" ? (
-                  <ellipse cx={UI_W / 2} cy={UI_H / 2} rx={UI_W / 2} ry={UI_H / 2} />
+                  <ellipse
+                    cx={UI_W / 2}
+                    cy={UI_H / 2}
+                    rx={UI_W / 2}
+                    ry={UI_H / 2}
+                  />
                 ) : (
                   <rect
                     x={0}
@@ -207,69 +212,83 @@ const ImagePositioning: React.FC<ImagePositioningProps> = ({
               </clipPath>
             </defs>
 
-            {/* Stencil outline */}
-            <g style={{ pointerEvents: "none" }}>
-              {template.mask?.type === "oval" ? (
-                <ellipse
-                  cx={UI_W / 2}
-                  cy={UI_H / 2}
-                  rx={UI_W / 2}
-                  ry={UI_H / 2}
-                  fill={backgroundColor}
-                  stroke="#3b82f6"
-                  strokeWidth="4"
-                />
-              ) : (
-                <rect
+            {/* 1) BACKGROUND FILL (in case no image) */}
+            <g clipPath={`url(#${clipId})`}>
+              {type === "background" || type === "logo" ? (
+                <rect x={0} y={0} width={UI_W} height={UI_H} fill={backgroundColor} />
+              ) : null}
+            </g>
+
+            {/* 2) LOCKED BACKGROUND IMAGE (only visible when positioning LOGO) */}
+            {type === "logo" && badgeBackgroundImage?.src && (
+              <g clipPath={`url(#${clipId})`}>
+                <image
+                  href={badgeBackgroundImage.src}
                   x={0}
                   y={0}
-                  width={UI_W}
-                  height={UI_H}
-                  rx={(template.mask?.rx ?? 4) * UI_SCALE}
-                  ry={(template.mask?.ry ?? 4) * UI_SCALE}
-                  fill={backgroundColor}
-                  stroke="#3b82f6"
-                  strokeWidth="4"
+                  width={undefined}
+                  height={undefined}
+                  preserveAspectRatio="none"
+                  transform={`translate(${(badgeBackgroundImage.x ?? 0) * UI_SCALE}, ${(badgeBackgroundImage.y ?? 0) * UI_SCALE}) scale(${(badgeBackgroundImage.scale ?? 1) * UI_SCALE})`}
+                  style={{ imageRendering: "auto" }}
                 />
-              )}
-            </g>
-          </svg>
+              </g>
+            )}
 
-          {/* Draggable, clipped image + overlay that owns ALL events */}
-          <div
-            ref={overlayRef}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={onPointerUp}
-            onWheel={onWheel}
-            style={{
-              position: "absolute",
-              inset: 0,
-              clipPath: `url(#${clipId})`,
-              WebkitClipPath: `url(#${clipId})`,
-              overflow: "hidden",
-              cursor: dragging ? "grabbing" : "grab",
-              touchAction: "none",
-            }}
-          >
-            <img
-              ref={imgRef}
-              src={image}
-              alt={type}
-              style={{
-                position: "absolute",
-                left: pos.x,
-                top: pos.y,
-                transform: `scale(${scale})`,
-                transformOrigin: "top left",
-                willChange: "transform,left,top",
-                userSelect: "none",
-                pointerEvents: "none",
-              }}
-              draggable={false}
-            />
-          </div>
+            {/* 3) DRAGGABLE IMAGE (background or logo), clipped + mouse-catching overlay on top */}
+            <g clipPath={`url(#${clipId})`}>
+              {/* Draggable visual */}
+              <image
+                href={image}
+                x={0}
+                y={0}
+                width={undefined}
+                height={undefined}
+                preserveAspectRatio="none"
+                transform={`translate(${pos.x}, ${pos.y}) scale(${scale})`}
+                style={{ imageRendering: "auto", pointerEvents: "none", userSelect: "none" }}
+              />
+              {/* Invisible hit area to capture all pointer events inside the frame */}
+              <rect
+                x={0}
+                y={0}
+                width={UI_W}
+                height={UI_H}
+                fill="transparent"
+                style={{ cursor: dragging ? "grabbing" : "grab" }}
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+                onPointerCancel={onPointerUp}
+                onWheel={onWheel}
+              />
+            </g>
+
+            {/* 4) FRAME/OUTLINE (always on top) */}
+            {template.mask?.type === "oval" ? (
+              <ellipse
+                cx={UI_W / 2}
+                cy={UI_H / 2}
+                rx={UI_W / 2}
+                ry={UI_H / 2}
+                fill="none"
+                stroke="#3b82f6"
+                strokeWidth="4"
+              />
+            ) : (
+              <rect
+                x={0}
+                y={0}
+                width={UI_W}
+                height={UI_H}
+                rx={(template.mask?.rx ?? 4) * UI_SCALE}
+                ry={(template.mask?.ry ?? 4) * UI_SCALE}
+                fill="none"
+                stroke="#3b82f6"
+                strokeWidth="4"
+              />
+            )}
+          </svg>
         </div>
 
         <div className="flex justify-end gap-3 mt-6">

@@ -16,8 +16,26 @@ export interface BadgeImage {
   scale: number;
 }
 
+export interface BadgeLine {
+  text: string;
+  size: number;
+  color: string;
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+  alignment: 'left' | 'center' | 'right';
+  fontFamily: string;
+}
+
+export interface BadgeImage {
+  src: string;
+  x: number;
+  y: number;
+  scale: number;
+}
+
 export interface Badge {
-  templateId: string;
+  templateId?: string;
   lines: BadgeLine[];
   backgroundColor: string;
   backing: 'pin' | 'magnetic' | 'adhesive';

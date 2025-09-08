@@ -1,18 +1,19 @@
-import { Badge } from "../types/badge";
-import { DEFAULT_TEMPLATE } from "../utils/templates";
+import type { Badge } from "../types/badge";
 
 export const BADGE_CONSTANTS = {
-  WIDTH: 300, // not strictly needed by SVG now; template controls width/height
-  HEIGHT: 100,
-  MAX_LINES: 4
-};
+  MAX_LINES: 4,
+  MIN_FONT_SIZE: 8,
+  BADGE_WIDTH: 300,
+  BADGE_HEIGHT: 100,
+} as const;
 
 export const INITIAL_BADGE: Badge = {
-  templateId: DEFAULT_TEMPLATE.id,
-  backgroundColor: "#FFFFFF",
-  backing: "pin",
+  templateId: 'rect-1x3',
+  backgroundColor: '#FFFFFF',
+  backing: 'pin',
   lines: [
-    { text: "Your Badge Text", size: 18, color: "#000000", bold: false, italic: false, underline: false, fontFamily: "Roboto", alignment: "center" }
+    { text: 'Your Badge Text', size: 18, color: '#000000', bold: false, italic: false, underline: false, fontFamily: 'Roboto', alignment: 'center' },
   ],
-  // images start undefined
+  backgroundImage: undefined,
+  logo: undefined,
 };
