@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { ArrowPathIcon } from '@heroicons/react/24/solid';
 import { 
   ArrowPathIcon as ArrowPathIconOutline,
@@ -17,12 +17,18 @@ import {
 import { generatePDFWithLayoutEngine as generatePDF } from '../utils/pdfGenerator';
 import { BadgeTextLinesHeader } from './BadgeTextLinesHeader';
 import { BadgeEditPanel } from './BadgeEditPanel';
-import { BadgeLine, Badge } from '../types/badge';
+import { BadgeLine, Badge, BadgeImage } from '../../src/types/badge';
 import { BACKGROUND_COLORS, FONT_COLORS, EXTENDED_BACKGROUND_COLORS } from '../constants/colors';
 import { BADGE_CONSTANTS } from '../constants/badge';
 import { generateFullBadgeImage, generateThumbnailFromFullImage } from '../utils/badgeThumbnail';
 import { getCurrentShop, saveBadgeDesign, ShopAuthData } from '../utils/shopAuth';
 import { createApi } from '../utils/api';
+import { getTemplates, getTemplateById } from '../../src/utils/templates';
+import BadgeSvgRenderer from '../../src/components/BadgeSvgRenderer';
+import { ImageControls } from '../../src/components/ImageControls';
+import { downloadSvg, downloadPng, downloadTiff, downloadPdf, downloadCdr } from '../../src/utils/export';
+import { renderBadgeToSvgString } from '../../src/utils/renderSvg';
+import { INITIAL_BADGE } from '../../src/constants/badge';
 
 interface BadgeDesignerProps {
   productId?: string | null;
@@ -56,16 +62,9 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
   // Create API instance with environment variables
   const api = createApi(gadgetApiUrl, gadgetApiKey);
 
-  
   const LINE_HEIGHT_MULTIPLIER = 1.3;
-  const [badge, setBadge] = useState({
-    lines: [
-      { text: 'Your Name', size: 18, color: '#000000', bold: false, italic: false, underline: false, fontFamily: 'Roboto', alignment: 'center' } as BadgeLine,
-      { text: 'Title', size: 13, color: '#000000', bold: false, italic: false, underline: false, fontFamily: 'Roboto', alignment: 'center' } as BadgeLine,
-    ],
-    backgroundColor: '#FFFFFF',
-    backing: 'pin',
-  });
+  const [badge, setBadge] = useState<Badge>(INITIAL_BADGE);
+  const [templates, setTemplates] = useState<{id:string; name:string}[]>([]);
   const [showCsvModal, setShowCsvModal] = useState(false);
   const [csvText, setCsvText] = useState('');
   const [csvPreview, setCsvPreview] = useState<string[][]>([]);
@@ -75,6 +74,11 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [showExtendedBgPicker, setShowExtendedBgPicker] = useState(false);
 
+  // Load templates on component mount
+  useEffect(() => {
+    const templateList = getTemplates();
+    setTemplates(templateList.map(t => ({ id: t.id, name: t.name })));
+  }, []);
 
   // Helper to estimate text width for a given font size and string
   const measureTextWidth = (text: string, fontSize: number, fontFamily: string, bold: boolean, italic: boolean) => {
@@ -148,6 +152,86 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
     return result;
   };
 
+  // Helper functions for image handling
+  const handleImageUpload = (file: File, type: 'backgroundImage' | 'logo'): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        resolve(result);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const updateImagePosition = (type: 'backgroundImage' | 'logo', x: number, y: number) => {
+    const currentImage = badge[type];
+    if (currentImage) {
+      setBadge({
+        ...badge,
+        [type]: {
+          src: (currentImage as BadgeImage).src,
+          x,
+          y,
+          scale: (currentImage as BadgeImage).scale,
+        },
+      });
+    }
+  };
+
+  const updateImageScale = (type: 'backgroundImage' | 'logo', scale: number) => {
+    const currentImage = badge[type];
+    if (currentImage) {
+      setBadge({
+        ...badge,
+        [type]: {
+          src: (currentImage as BadgeImage).src,
+          x: (currentImage as BadgeImage).x,
+          y: (currentImage as BadgeImage).y,
+          scale,
+        },
+      });
+    }
+  };
+
+  const removeImage = (type: 'backgroundImage' | 'logo') => {
+    setBadge({
+      ...badge,
+      [type]: undefined,
+    });
+  };
+
+  // Helper function for server-side export
+  const postExport = async (endpoint: string, svgString: string, filename: string) => {
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ svg: svgString }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Export failed: ${response.statusText}`);
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Export error:', error);
+      alert('Export failed. Please try again.');
+    }
+  };
+
   // Handlers for badge state
   const updateLine = (index: number, changes: any) => {
     const newLines = badge.lines.map((l: any, i: number) => {
@@ -206,12 +290,15 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
   };
   const resetBadge = () => {
     setBadge({
+      templateId: templates[0]?.id || 'rect-1x3',
       lines: [
         { text: 'Your Name', size: 18, color: '#000000', bold: false, italic: false, underline: false, fontFamily: 'Arial', alignment: 'center' } as BadgeLine,
         { text: 'Title', size: 13, color: '#000000', bold: false, italic: false, underline: false, fontFamily: 'Arial', alignment: 'center' } as BadgeLine,
       ],
       backgroundColor: '#FFFFFF',
       backing: 'pin',
+      backgroundImage: undefined,
+      logo: undefined,
     });
   };
   const saveBadge = async () => {
@@ -659,20 +746,56 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
               <h2 className="text-xl font-bold text-gray-800">Customize Your Badge</h2>
               <span className="text-xl font-bold text-red-600">1x3 Badge</span>
             </div>
-            <button
-              onClick={() => {
-                console.log('PDF button clicked!');
-                console.log('Badge data:', badge);
-                console.log('Badge data JSON:', JSON.stringify(badge, null, 2));
-                console.log('Line 1 text:', `"${badge.lines[0].text}"`);
-                console.log('Line 1 text length:', badge.lines[0].text?.length);
-                console.log('Multiple badges:', multipleBadges);
-                generatePDF(badge, multipleBadges);
-              }}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+            <div className="flex items-center gap-2">
+              <select
+                className="border rounded px-2 py-1 text-sm"
+                value={badge.templateId || templates[0]?.id}
+                onChange={e => setBadge({ ...badge, templateId: e.target.value })}
+              >
+                {templates.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+              <button
+                onClick={() => {
+                  console.log('PDF button clicked!');
+                  console.log('Badge data:', badge);
+                  console.log('Badge data JSON:', JSON.stringify(badge, null, 2));
+                  console.log('Line 1 text:', `"${badge.lines[0].text}"`);
+                  console.log('Line 1 text length:', badge.lines[0].text?.length);
+                  console.log('Multiple badges:', multipleBadges);
+                  generatePDF(badge, multipleBadges);
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+              >
+                Download PDF
+              </button>
+            </div>
+          </div>
+          
+          {/* Template Selector */}
+          <div className="mb-4">
+            <label className="block text-sm font-semibold mb-1">Shape / Template</label>
+            <select
+              className="border rounded px-2 py-1 text-sm bg-white"
+              value={badge.templateId}
+              onChange={(e) => setBadge({ ...badge, templateId: e.target.value })}
             >
-              Download PDF
-            </button>
+              {templates.map(t => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+            {/* debug removed */}
+          </div>
+          
+          {/* Export Options */}
+          <div className="mb-4">
+            <h3 className="font-semibold text-gray-700 mb-2">Export Options</h3>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button className="control-button px-3 py-2" onClick={() => downloadSvg(badge)}>Download SVG</button>
+              <button className="control-button px-3 py-2" onClick={() => downloadPng(badge, 2)}>Download PNG</button>
+              <button className="control-button px-3 py-2" onClick={() => downloadCdr(badge)}>Download CDR (SVG)</button>
+              <button className="control-button px-3 py-2" onClick={() => downloadTiff(badge)}>Download TIFF</button>
+              <button className="control-button px-3 py-2" onClick={() => downloadPdf(badge)}>Download PDF</button>
+            </div>
           </div>
           
           {/* Move background color label, swatches, and preview to the left, lined up with 'Text Lines'. Make font size for 'Background Color' and 'Text Lines' the same. */}
@@ -697,44 +820,15 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
               >More colors…</button>
             </div>
             {/* Preview Box */}
-            <div className="flex items-center justify-center rounded border w-full max-w-[300px] badge-preview" style={{
-              height: badgeHeight,
-              background: badge.backgroundColor,
-              overflow: 'hidden',
-              position: 'relative',
-              border: '2px solid #888'
-            }}>
-              <div
-                className={`w-full h-full flex flex-col justify-center items-center px-4`}
-                style={{ textAlign: (badge.lines[0].alignment as 'left' | 'center' | 'right') || 'center' }}
-              >
-                {badge.lines.map((line: any, idx: number) => {
-                  const alignment: 'left' | 'center' | 'right' =
-                    line.alignment === 'left' || line.alignment === 'center' || line.alignment === 'right'
-                      ? line.alignment
-                      : 'center';
-                  return (
-                    <span
-                      key={idx}
-                      style={{
-                        fontSize: line.size,
-                        color: line.color,
-                        fontWeight: line.bold ? 'bold' : 'normal',
-                        fontStyle: line.italic ? 'italic' : 'normal',
-                        textDecoration: line.underline ? 'underline' : 'none',
-                        fontFamily: getFontFamily(line.fontFamily),
-                        whiteSpace: 'nowrap',
-                        margin: line.alignment === 'left' ? '0 auto 0 0' : line.alignment === 'right' ? '0 0 0 auto' : '0 auto',
-                        lineHeight: 1.3,
-                        textAlign: alignment,
-                      }}
-                    >
-                      {line.text}
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
+            <BadgeSvgRenderer badge={badge} />
+          </div>
+
+          {/* Image Controls */}
+          <div className="mb-6">
+            <ImageControls
+              badge={badge}
+              onChange={(b) => setBadge(b)}
+            />
           </div>
 
           {/* Text Lines */}
@@ -783,12 +877,185 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
                     name="backing"
                     value={option.value}
                     checked={badge.backing === option.value}
-                    onChange={(e) => setBadge({ ...badge, backing: e.target.value })}
+                    onChange={(e) => setBadge({ ...badge, backing: e.target.value as 'pin' | 'magnetic' | 'adhesive' })}
                     className="text-blue-600"
                   />
                   <span className="text-sm">{option.label}</span>
                 </label>
               ))}
+            </div>
+          </div>
+
+          {/* Image Upload Section */}
+          <div className="mb-4">
+            <h3 className="font-semibold text-gray-700 mb-2">Images</h3>
+            
+            {/* Background Image */}
+            <div className="mb-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Background Image</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      try {
+                        const imageData = await handleImageUpload(file, 'backgroundImage');
+                        setBadge({
+                          ...badge,
+                          backgroundImage: {
+                            src: imageData,
+                            x: 0,
+                            y: 0,
+                            scale: 1.0,
+                          },
+                        });
+                      } catch (error) {
+                        console.error('Failed to upload background image:', error);
+                        alert('Failed to upload image. Please try again.');
+                      }
+                    }
+                  }}
+                  className="text-sm"
+                />
+                {badge.backgroundImage && (
+                  <button
+                    onClick={() => removeImage('backgroundImage')}
+                    className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              {badge.backgroundImage && (
+                <div className="mt-2 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs">X Position:</label>
+                    <input
+                      type="number"
+                      value={(badge.backgroundImage as BadgeImage).x}
+                      onChange={(e) => {
+                        if (badge.backgroundImage) {
+                          updateImagePosition('backgroundImage', parseInt(e.target.value) || 0, (badge.backgroundImage as BadgeImage).y);
+                        }
+                      }}
+                      className="w-16 px-1 py-1 text-xs border rounded"
+                    />
+                    <label className="text-xs">Y Position:</label>
+                    <input
+                      type="number"
+                      value={(badge.backgroundImage as BadgeImage).y}
+                      onChange={(e) => {
+                        if (badge.backgroundImage) {
+                          updateImagePosition('backgroundImage', (badge.backgroundImage as BadgeImage).x, parseInt(e.target.value) || 0);
+                        }
+                      }}
+                      className="w-16 px-1 py-1 text-xs border rounded"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs">Scale:</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0.1"
+                      max="3.0"
+                      value={(badge.backgroundImage as BadgeImage).scale}
+                      onChange={(e) => {
+                        if (badge.backgroundImage) {
+                          updateImageScale('backgroundImage', parseFloat(e.target.value) || 1.0);
+                        }
+                      }}
+                      className="w-16 px-1 py-1 text-xs border rounded"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Logo */}
+            <div className="mb-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Logo</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      try {
+                        const imageData = await handleImageUpload(file, 'logo');
+                        setBadge({
+                          ...badge,
+                          logo: {
+                            src: imageData,
+                            x: 0,
+                            y: 0,
+                            scale: 1.0,
+                          },
+                        });
+                      } catch (error) {
+                        console.error('Failed to upload logo:', error);
+                        alert('Failed to upload image. Please try again.');
+                      }
+                    }
+                  }}
+                  className="text-sm"
+                />
+                {badge.logo && (
+                  <button
+                    onClick={() => removeImage('logo')}
+                    className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              {badge.logo && (
+                <div className="mt-2 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs">X Position:</label>
+                    <input
+                      type="number"
+                      value={(badge.logo as BadgeImage).x}
+                      onChange={(e) => {
+                        if (badge.logo) {
+                          updateImagePosition('logo', parseInt(e.target.value) || 0, (badge.logo as BadgeImage).y);
+                        }
+                      }}
+                      className="w-16 px-1 py-1 text-xs border rounded"
+                    />
+                    <label className="text-xs">Y Position:</label>
+                    <input
+                      type="number"
+                      value={(badge.logo as BadgeImage).y}
+                      onChange={(e) => {
+                        if (badge.logo) {
+                          updateImagePosition('logo', (badge.logo as BadgeImage).x, parseInt(e.target.value) || 0);
+                        }
+                      }}
+                      className="w-16 px-1 py-1 text-xs border rounded"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs">Scale:</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0.1"
+                      max="3.0"
+                      value={(badge.logo as BadgeImage).scale}
+                      onChange={(e) => {
+                        if (badge.logo) {
+                          updateImageScale('logo', parseFloat(e.target.value) || 1.0);
+                        }
+                      }}
+                      className="w-16 px-1 py-1 text-xs border rounded"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -832,81 +1099,7 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
                 </div>
                 {/* Main preview box */}
                 <div className="flex flex-col items-center w-full max-w-[300px]">
-                  <div
-                    className="flex items-center justify-center rounded border w-full max-w-[300px]"
-                    style={{ height: badgeHeight, background: badge.backgroundColor, overflow: 'hidden', position: 'relative', border: '2px solid #888' }}
-                  >
-                    {(() => {
-                      const justifyMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
-                      const align = justifyMap[badge.lines[0].alignment as 'left' | 'center' | 'right'];
-                      if (badge.lines.length === 1) {
-                        return (
-                          <div
-                            className={`w-full h-full flex flex-col items-${align} justify-center px-4`}
-                            style={{ textAlign: (badge.lines[0].alignment as 'left' | 'center' | 'right') || 'center' }}
-                          >
-                            {badge.lines.map((line: any, idx: number) => {
-                              const alignment: 'left' | 'center' | 'right' =
-                                line.alignment === 'left' || line.alignment === 'center' || line.alignment === 'right'
-                                  ? line.alignment
-                                  : 'center';
-                              return (
-                                <span
-                                  key={idx}
-                                  style={{
-                                    fontSize: line.size,
-                                    color: line.color,
-                                    fontWeight: line.bold ? 'bold' : 'normal',
-                                    fontStyle: line.italic ? 'italic' : 'normal',
-                                    textDecoration: line.underline ? 'underline' : 'none',
-                                    fontFamily: getFontFamily(line.fontFamily),
-                                    whiteSpace: 'nowrap',
-                                    margin: line.alignment === 'left' ? '0 auto 0 0' : line.alignment === 'right' ? '0 0 0 auto' : '0 auto',
-                                    lineHeight: 1,
-                                    textAlign: alignment,
-                                  }}
-                                >
-                                  {line.text}
-                                </span>
-                              );
-                            })}
-                          </div>
-                        );
-                      }
-                      return (
-                        <div
-                          className={`w-full h-full flex flex-col justify-center items-center px-4`}
-                          style={{ textAlign: 'center' }}
-                        >
-                          {badge.lines.map((line: any, idx: number) => {
-                            const alignment: 'left' | 'center' | 'right' =
-                              line.alignment === 'left' || line.alignment === 'center' || line.alignment === 'right'
-                                ? line.alignment
-                                : 'center';
-                            return (
-                              <span
-                                key={idx}
-                                style={{
-                                  fontSize: line.size,
-                                  color: line.color,
-                                  fontWeight: line.bold ? 'bold' : 'normal',
-                                  fontStyle: line.italic ? 'italic' : 'normal',
-                                  textDecoration: line.underline ? 'underline' : 'none',
-                                  fontFamily: getFontFamily(line.fontFamily),
-                                  whiteSpace: 'nowrap',
-                                  margin: line.alignment === 'left' ? '0 auto 0 0' : line.alignment === 'right' ? '0 0 0 auto' : '0 auto',
-                                  lineHeight: 1.3,
-                                  textAlign: alignment,
-                                }}
-                              >
-                                {line.text}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      );
-                    })()}
-                  </div>
+                  <BadgeSvgRenderer badge={badge} />
                 </div>
               </div>
               {/* Multiple badge previews below, each with edit/delete and number */}
@@ -926,81 +1119,7 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
                     </div>
                     {/* Preview box */}
                     <div className="flex flex-col items-center w-full max-w-[300px]">
-                      <div
-                        className="flex items-center justify-center rounded border w-full max-w-[300px] badge-preview-multiple"
-                        style={{ height: badgeHeight, background: b.backgroundColor, overflow: 'hidden', position: 'relative', border: '2px solid #888' }}
-                      >
-                        {(() => {
-                          const justifyMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
-                          const align = justifyMap[b.lines[0].alignment as 'left' | 'center' | 'right'];
-                          if (b.lines.length === 1) {
-                            return (
-                              <div
-                                className={`w-full h-full flex flex-col items-${align} justify-center px-4`}
-                                style={{ textAlign: (b.lines[0].alignment as 'left' | 'center' | 'right') || 'center' }}
-                              >
-                                {b.lines.map((line: any, idx: number) => {
-                                  const alignment: 'left' | 'center' | 'right' =
-                                    line.alignment === 'left' || line.alignment === 'center' || line.alignment === 'right'
-                                      ? line.alignment
-                                      : 'center';
-                                  return (
-                                    <span
-                                      key={idx}
-                                      style={{
-                                        fontSize: line.size,
-                                        color: line.color,
-                                        fontWeight: line.bold ? 'bold' : 'normal',
-                                        fontStyle: line.italic ? 'italic' : 'normal',
-                                        textDecoration: line.underline ? 'underline' : 'none',
-                                        fontFamily: getFontFamily(line.fontFamily),
-                                        whiteSpace: 'nowrap',
-                                        margin: line.alignment === 'left' ? '0 auto 0 0' : line.alignment === 'right' ? '0 0 0 auto' : '0 auto',
-                                        lineHeight: 1,
-                                        textAlign: alignment,
-                                      }}
-                                    >
-                                      {line.text}
-                                    </span>
-                                  );
-                                })}
-                              </div>
-                            );
-                          }
-                          return (
-                            <div
-                              className={`w-full h-full flex flex-col justify-center items-center px-4`}
-                              style={{ textAlign: undefined }}
-                            >
-                              {b.lines.map((line: any, idx: number) => {
-                                const alignment: 'left' | 'center' | 'right' =
-                                  line.alignment === 'left' || line.alignment === 'center' || line.alignment === 'right'
-                                    ? line.alignment
-                                    : 'center';
-                                return (
-                                  <span
-                                    key={idx}
-                                    style={{
-                                      fontSize: line.size,
-                                      color: line.color,
-                                      fontWeight: line.bold ? 'bold' : 'normal',
-                                      fontStyle: line.italic ? 'italic' : 'normal',
-                                      textDecoration: line.underline ? 'underline' : 'none',
-                                      fontFamily: getFontFamily(line.fontFamily),
-                                      whiteSpace: 'nowrap',
-                                      margin: line.alignment === 'left' ? '0 auto 0 0' : line.alignment === 'right' ? '0 0 0 auto' : '0 auto',
-                                      lineHeight: 1.3,
-                                      textAlign: alignment,
-                                    }}
-                                  >
-                                    {line.text}
-                                  </span>
-                                );
-                              })}
-                            </div>
-                          );
-                        })()}
-                      </div>
+                      <BadgeSvgRenderer badge={b} />
                     </div>
                   </div>
                   {/* Edit Modal UI */}
@@ -1037,44 +1156,7 @@ const BadgeDesigner: React.FC<BadgeDesignerProps> = ({ productId: _productId, sh
                                   </div>
                                 </div>
                                 {/* Live Preview */}
-                                <div className="flex items-center justify-center rounded border w-full max-w-[300px]" style={{ height: badgeHeight, background: badgeToEdit.backgroundColor, overflow: 'hidden', position: 'relative', border: '2px solid #888' }}>
-                                  {(() => {
-                                    const justifyMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
-                                    const align = justifyMap[badgeToEdit.lines[0].alignment as 'left' | 'center' | 'right'];
-                                    return (
-                                      <div
-                                        className={`w-full h-full flex flex-col justify-center items-${align} px-4`}
-                                        style={{ textAlign: (badgeToEdit.lines[0].alignment as 'left' | 'center' | 'right') || 'center' }}
-                                      >
-                                        {badgeToEdit.lines.map((line: any, idx: number) => {
-                                          const alignment: 'left' | 'center' | 'right' =
-                                            line.alignment === 'left' || line.alignment === 'center' || line.alignment === 'right'
-                                              ? line.alignment
-                                              : 'center';
-                                          return (
-                                            <span
-                                              key={idx}
-                                              style={{
-                                                fontSize: line.size,
-                                                color: line.color,
-                                                fontWeight: line.bold ? 'bold' : 'normal',
-                                                fontStyle: line.italic ? 'italic' : 'normal',
-                                                textDecoration: line.underline ? 'underline' : 'none',
-                                                fontFamily: getFontFamily(line.fontFamily),
-                                                whiteSpace: 'nowrap',
-                                                margin: line.alignment === 'left' ? '0 auto 0 0' : line.alignment === 'right' ? '0 0 0 auto' : '0 auto',
-                                                lineHeight: 1.3,
-                                                textAlign: alignment,
-                                              }}
-                                            >
-                                              {line.text}
-                                            </span>
-                                          );
-                                        })}
-                                      </div>
-                                    );
-                                  })()}
-                                </div>
+                                <BadgeSvgRenderer badge={badgeToEdit} />
                               </div>
                               {/* Editable Lines */}
                               <div className="flex flex-col gap-6 w-full max-w-2xl">

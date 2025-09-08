@@ -9,10 +9,20 @@ export interface BadgeLine {
   fontFamily: string;
 }
 
+export interface BadgeImage {
+  src: string;
+  x: number;
+  y: number;
+  scale: number;
+}
+
 export interface Badge {
+  templateId: string;
   lines: BadgeLine[];
   backgroundColor: string;
-  backing: string;
+  backing: 'pin' | 'magnetic' | 'adhesive';
+  backgroundImage?: BadgeImage;
+  logo?: BadgeImage;
 }
 
 export interface BadgeEditorPanelProps {

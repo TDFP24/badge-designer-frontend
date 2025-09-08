@@ -1,7 +1,7 @@
 import React from 'react';
 import { Badge } from '../types/badge';
 import { BADGE_CONSTANTS } from '../constants/badge';
-import { BadgePreview } from './BadgePreview';
+import BadgeSvgRenderer from '../../src/components/BadgeSvgRenderer';
 import { BadgeEditorPanel } from './BadgeEditorPanel';
 import { BadgeTextLinesHeader } from './BadgeTextLinesHeader';
 
@@ -95,7 +95,7 @@ export const MultiBadgeEditModal: React.FC<MultiBadgeEditModalProps> = ({
                   </div>
 
                   <div className="flex items-center justify-center">
-                    <BadgePreview badge={badge} isMultiple />
+                    <BadgeSvgRenderer badge={badge} />
                   </div>
                 </div>
               </div>

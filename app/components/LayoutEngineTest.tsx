@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Badge } from '../types/badge';
 import { computeBadgeLayout } from '../utils/layoutEngine';
 import { PreviewRenderer } from '../utils/renderers/previewRenderer';
-import { BadgePreview } from './BadgePreview';
+import BadgeSvgRenderer from '../../src/components/BadgeSvgRenderer';
 
 interface LayoutEngineTestProps {
   badge: Badge;
@@ -153,7 +153,7 @@ export const LayoutEngineTest: React.FC<LayoutEngineTestProps> = ({ badge }) => 
       {/* Current Badge Preview */}
       <div className="mb-6">
         <h3 className="text-lg font-semibold mb-2">Current Badge Preview</h3>
-        <BadgePreview badge={badge} />
+        <BadgeSvgRenderer badge={badge} />
       </div>
 
       {/* Layout Information */}
